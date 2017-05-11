@@ -54,11 +54,11 @@ package a USB recovery device.
 - Get the source code:
 
   cd ${TOP}
-  git clone https://github.com:alexelder/aspen-tools.git
-  git clone https://github.com:alexelder/aspen-linux.git
-  git clone https://github.com:alexelder/aspen-u-boot.git
-  git clone https://github.com:alexelder/aspen-arm-trusted-firmware.git
-  git clone https://github.com:alexelder/aspen-l-loader.git
+  git clone https://github.com/alexelder/aspen-tools.git
+  git clone https://github.com/alexelder/aspen-linux.git
+  git clone https://github.com/alexelder/aspen-u-boot.git
+  git clone https://github.com/alexelder/aspen-arm-trusted-firmware.git
+  git clone https://github.com/alexelder/aspen-l-loader.git
 
 - Set up branches to use, and make sure everything is clean:
 
