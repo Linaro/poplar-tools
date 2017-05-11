@@ -1,0 +1,311 @@
+
+
+######################################################################
+                            TEMPORARY NOTE
+######################################################################
+All of the git repository URLs below now look something like this:
+
+    https://github.com:alexelder/aspen-tools.git
+
+Before we go "live" they will all be updated to look like this:
+
+    https://github.com:linaro/poplar-tools.git
+
+to reflect their final resting place.
+
+In addition, I have described checking out branches named
+"aspen-test".  Instead, we'll plan to have the "latest" branch
+contain the latest code that's we believe to be the best version
+of code for people to use.  That is, if one checks out "latest" of
+all branches and builds them, the result should be expected to work.
+Those names will change in this document before we publish this.
+######################################################################
+
+Building Poplar System Recovery Media From Source
+-------------------------------------------------
+The instructions that follow describe the process for creating a USB
+flash drive suitable for use in recovering a Poplar system from a
+"bricked" state.  The USB memory stick must be at least 8GB.
+
+1)  Gather required sources
+
+First we'll gather the source code and other materials required to
+package a USB recovery device.
+
+- Make sure you have needed tools installed.  This list may well
+  grow, but at least you'll need the following:
+
+      sudo apt-get install device-tree-compiler
+
+- Set up the working directory.
+
+  mkdir -p ~/src/poplar
+  cd ~/src/poplar
+  TOP=$(pwd)
+
+- Download a root file system image to use.  These are available from
+  Linaro.  For example "linaro-stretch-developer-20170504-58.tar.gz"
+  from here:
+    http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/
+
+  cd ${TOP}
+  wget http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/linaro-stretch-developer-20170504-58.tar.gz
+
+- Get the source code:
+
+  cd ${TOP}
+  git clone https://github.com:alexelder/aspen-tools.git
+  git clone https://github.com:alexelder/aspen-linux.git
+  git clone https://github.com:alexelder/aspen-u-boot.git
+  git clone https://github.com:alexelder/aspen-arm-trusted-firmware.git
+  git clone https://github.com:alexelder/aspen-l-loader.git
+
+- Set up branches to use, and make sure everything is clean:
+
+    cd ${TOP}/aspen-linux
+    git checkout -b aspen-test origin/aspen-test
+    make distclean
+
+    cd ${TOP}/aspen-u-boot
+    git checkout -b aspen-test origin/aspen-test
+    make distclean
+
+    cd ${TOP}/aspen-arm-trusted-firmware
+    git checkout -b aspen-test origin/aspen-test
+    make distclean
+
+    cd ${TOP}/aspen-l-loader
+    git checkout -b aspen-test origin/aspen-test
+    make clean
+
+- Prepare for building.  Almost everything is aarch64, but one item
+  (l-loader.bin) must be built for 32-bit ARM.  Set up environment
+  variables to represent the two cross-compiler toolchains we'll
+  be using.
+
+    CROSS_32=arm-linux-gnueabi-
+    CROSS_64=aarch64-linux-gnu-
+
+  If you don't already have ARM 32- and 64-bit toochains installed,
+  they are available from Linaro.
+    https://releases.linaro.org/components/toolchain/binaries/latest/
+  Install the "aarch64-linux-gnu" and "arm-linux-gnueabi" packages
+  for your system.  (Depending on where you install them, you may
+  need to specify absolute paths for the values of CROSS_32 and
+  CROSS_64.)
+
+  Large builds (e.g Linux) are sped up considerably by running
+  "make" with multiple concurrent jobs.  The command below sets
+  JOBCOUNT to something reasonable to benefit from this.
+
+    JOBCOUNT=$(grep ^processor /proc/cpuinfo | wc -w)
+
+  Finally, set up a directory to contain (most) output files:
+    mkdir -p ${TOP}/out
+
+2)  Build everything
+
+- Build Linux.  The result of this process will be two files: "Image"
+  contains the kernel image; and "hi3798cv200-poplar.dtb" containing
+  the flattened device tree file (device tree binary).  "Image" will
+  be under arm64/boot/ and "hi3798cv200-poplar.dtb" will be under
+  arm64/boot/dts/hisilicon/ in the output directory.
+
+    cd ${TOP}/aspen-linux
+    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" O=${TOP}/out/linux \
+		defconfig
+    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" O=${TOP}/out/linux \
+		-j ${JOBCOUNT}
+
+- Build U-Boot.  The result of this process will be a file
+  "u-boot.bin" that we will be incorporated into a "FIP" file
+  created for ARM Trusted Firmware code.
+
+    cd ${TOP}/aspen-u-boot
+    make CROSS_COMPILE=${CROSS_64} O=${TOP}/out/u-boot \
+    		poplar_defconfig
+    make CROSS_COMPILE=${CROSS_64} O=${TOP}/out/u-boot \
+		-j ${JOBCOUNT}
+    # The output file is ${TOP}/out/u-boot/u-boot.bin
+
+- Build ARM Trusted Firmware components.  This will create "bl1.bin"
+  and "fip.bin", both of which will be incorporated into the image
+  created for "l-loader".  The FIP file packages files "bl2.bin" and
+  "bl31.bin" built here along with "u-boot.bin" built earlier into
+  "fip.bin".  ARM Trusted Firmware keeps its output in a directory
+  "build"; we'll create a symlink to that in our output directory,
+  to keep things together.
+
+    ln -sf ${TOP}/aspen-arm-trusted-firmware/build \
+		${TOP}/out/arm-trusted-firmware
+    cd ${TOP}/aspen-arm-trusted-firmware
+    make CROSS_COMPILE=${CROSS_64} all fip \
+		SPD=none BL33=${TOP}/out/u-boot/u-boot.bin \
+		DEBUG=1 PLAT=poplar
+    # There are two output files:
+    # ${TOP}/arm-trusted-firmware/build/poplar/debug/bl1.bin
+    # ${TOP}/arm-trusted-firmware/build/poplar/debug/fip.bin
+
+- Build "l-loader".  First we'll gather the ARM Trusted Firmware
+  components we'll need.  We make copies here, but symbolic links
+  could be used instead.  Note that "l-loader" is a 32-bit
+  executable, so we need to use a different tool chain.  l-loader
+  only supports putting output files in the build directory.
+
+    mkdir -p ${TOP}/out/l-loader
+    cd ${TOP}/aspen-l-loader
+    ln -sf ${TOP}/out/arm-trusted-firmware/poplar/debug/bl1.bin atf/
+    ln -sf ${TOP}/out/arm-trusted-firmware/poplar/debug/fip.bin atf/
+    make CROSS_COMPILE=${CROSS_32}
+    # Put a link to it in our out directory
+    ln -sf ${TOP}/aspen-l-loader/l-loader.bin ${TOP}/out/l-loader
+    # The output file is ${TOP}/l-loader/l-loader.bin
+
+- Build images for a USB recovery stick.  This involves setting up
+  images and an installer program used to populate the eMMC media on
+  the Poplar board.
+
+    cd ${TOP}/out
+    mkdir -p recovery
+    cd recovery
+    ln -sf ${TOP}/out/l-loader/l-loader.bin
+    ln -sf ${TOP}/out/linux/arch/arm64/boot/Image
+    ln -sf ${TOP}/out/linux/arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb
+    ln -sf ${TOP}/linaro-stretch-developer-20170504-58.tar.gz
+    # XXX Need to figure out where to check this in
+    bash poplar_recovery_builder.sh
+
+3)  Prepare a USB flash drive with the output of the build
+
+- Next, prepare your USB flash drive and copy over the installation
+  files to it.
+    - Insert the USB flash drive into your host system.  You will be
+      erasing everything on this drive, so plan accordingly.
+
+    - Identify your USB device:
+
+        grep . /sys/class/block/sd?/device/model
+
+      If you recognize the model name as your USB flash device, then
+      you know which "sd" device to use.  Here's an example:
+
+        /sys/class/block/sdc/device/model:Patriot Memory  
+	                 ^^^
+      I had a Patriot Memory USB flash drive, and the device name
+      I'll want is "/dev/sdc" (based on "sdc" above).  Record this
+      name:
+
+        USBDISK=/dev/sdc	# Make sure this is *your* device
+
+    - If any file systems on the flash drive got mounted, you will
+      need to unmount them.  Try this to see:
+
+	mount | grep ${USBDISK} | awk '{print $1}'
+
+      Unmount anything shows up, e.g.,
+
+        sudo umount /dev/sdc1
+
+    - Format the USB flash drive with a single "FAT32" file system.
+      YOU WILL LOSE ALL DATA ON THIS USB FLASH DRIVE.
+
+        sudo mkfs.fat -F 32 ${USBDISK}
+
+      --> Note that you'll get this message, which is normal:
+
+            attribute "partition" not found
+
+      --> If the USB flash drive has been previously formatted with
+          partitions on it, you may need to supply a "-I":
+
+            sudo mkfs.fat -F 32 -I ${USBDISK}
+
+    - Mount the new FAT32 file system:
+
+        mkdir /tmp/usb
+	sudo mount ${USBDISK} /tmp/usb
+
+    - Copy the USB-based recovery files to the USB flash drive:
+
+	sudo cp USB/* /tmp/usb
+
+    - Prepare for, and remove the USB flash drive:
+
+	sync /tmp/usb
+	sudo umount ${USBDISK}
+	sudo eject ${USBDISK}
+	rmdir /tmp/usb
+	unset USBDISK
+
+    - Remove the USB flash drive
+
+4)  Run the recovery on the Poplar board
+
+- Next we'll put the USB flash drive on the Poplar board to boot
+  from it.  The Poplar board should be powered off.  You should have
+  a cable from the Poplar's micro USB based serial port to your host
+  system so you can connect and observe activity on the serial port.
+  For me, the board console shows up as /dev/ttyUSB0 when the USB
+  cable is connected.  The serial port runs at 115200 baud.  I use
+  this command to see what's on the console:
+
+      screen /dev/ttyUSB0 115200
+
+- There are a total of 4 USB connectors on the Poplar board.  Two
+  are USB 2.0 ports, they're stacked on top of each other (labeled
+  "JX22" XXX).  Insert the USB memory stick into one of these two.
+
+- There is a "USB_BOOT" button on the board (labeled "S3" XXX).  It
+  is one of two buttons on same side of the boards as the stacked
+  USB2.0 ports.  To boot from the memory stick, this button needs to
+  be depressed at power-on.  You only need to hold it for about a
+  second; keeping it down a bit longer does no harm.
+
+- Hold the USB_BOOT button down, and power on the Poplar board.
+  Release the USB_BOOT button after a second or two.  The board
+  should boot, and the serial console should display boot messages.
+  Since you have started with the USB_BOOT pressed, you'll be
+  prompted with a message lke this:
+
+    ==== POPLAR USB RECOVERY ====
+
+    Are you sure you want to re-initialize your Poplar board?
+    Please enter "yes" to proceed: 
+
+- At this point, if you don't say "yes" *exactly* the recovery will
+  be aborted and the board will proceed (finish its boot, and
+  possibly auto-boot whatever is already loaded).
+
+- If you say "yes" to initializing your board, the installation
+  process will proceed.  You'll see some messages showing progress,
+  like:
+
+         RECOVERY STARTING
+
+    starting USB...
+    USB0:   USB EHCI 1.00
+    scanning bus 0 for devices... 3 USB Device(s) found
+           scanning usb for storage devices... 1 Storage Device(s) found
+           scanning usb for ethernet devices... 0 Ethernet Device(s) found
+    reading install.scr
+    2321 bytes read in 21 ms (107.4 KiB/s)
+    ## Executing script at 32000000
+    reading mbr.gz
+    174 bytes read in 15 ms (10.7 KiB/s)
+    Uncompressed size: 512 = 0x200
+
+    MMC write: dev # 0, block # 0, count 1 ... 1 blocks written: OK
+
+    reading ebr5.bin.gz
+    69 bytes read in 16 ms (3.9 KiB/s)
+    Uncompressed size: 512 = 0x200
+    . . .
+
+  It will take about 10 minutes to complete writing out the contents
+  of the disk.  When this is done, the board will automatically
+  reset.
+
+- Remove your USB memory stick from the Poplar board.
+
+You have now booted your Poplar board with open source code that you
+have built yourself.
