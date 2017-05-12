@@ -23,7 +23,7 @@ PART_ALIGNMENT=2048	# Align at 1MB (512-byte sectors)
 L_LOADER=l-loader.bin
 # In case the USB boot loader is different from what we want on eMMC
 USB_LOADER=${L_LOADER}	# Must be full l-loader.bin (including first sector)
-ROOT_FS_ARCHIVE=linaro-stretch-developer-\*.tar.gz
+ROOT_FS_ARCHIVE=linaro-stretch-developer-20170511-60.tar.gz
 KERNEL_IMAGE=Image
 DEVICE_TREE_BINARY=hi3798cv200-poplar.dtb
 # Initial ramdisk is optional; don't define it if it's not set
