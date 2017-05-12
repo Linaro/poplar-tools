@@ -2,6 +2,8 @@
 
 PROGNAME=$(basename $0)
 
+set -e		# Accept no failure
+
 # "Sizes" are all in sectors.  Otherwise we call it "bytes".
 SECTOR_BYTES=512
 EMMC_SIZE=15269888	# 7456 MB in sectors (not hex)
@@ -615,7 +617,7 @@ function save_partition() {
 ############################
 
 # Clean up in case we're killed or interrupted in a fairly normal way
-trap trap_cleanup SIGHUP SIGINT SIGQUIT SIGTERM
+trap trap_cleanup ERR SIGHUP SIGINT SIGQUIT SIGTERM
 
 echo
 echo ====== Poplar recovery image builder ======
