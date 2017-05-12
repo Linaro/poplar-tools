@@ -264,15 +264,16 @@ function partition_show() {
 
 	echo === Using the following disk layout ===
 
-	printf "%8s %8s %8s %7s %s\n" Start Size Type "FS Type" "Mount Point"
-	printf "%8s %8s %8s %7s %s\n" ----- ---- ---- ------- -----------
-	printf "%8u %8u %8s\n" 0 1 MBR
+	printf "# %8s %8s %8s %7s %s\n" Start Size Type "FS Type" "Mount Point"
+	# The "\055" is just a (leading) dash character (-)
+	printf "\055 %8s %8s %8s %7s %s\n" ----- ---- ---- ------- -----------
+	printf "* %8u %8u %8s\n" 0 1 MBR
 	for i in $(seq 1 ${PART_COUNT}); do
 		if [ $i -gt 4 ]; then
 			ebr_offset=$(expr ${PART_OFFSET[$i]} - 1)
-			printf "%8u %8u %8s\n" ${ebr_offset} 1 EBR
+			printf "* %8u %8u %8s\n" ${ebr_offset} 1 EBR
 		fi
-		printf "%8u %8u %8s" \
+		printf "%1u %8u %8u %8s" $i \
 			${PART_OFFSET[$i]} ${PART_SIZE[$i]} \
 			${PART_TYPE[$i]}
 		if [ $i -eq 1 ]; then
