@@ -134,9 +134,12 @@ function loop_attach() {
 	local offset=$1
 	local size=$2
 
-	sudo losetup ${LOOP} ${IMAGE} \
-		--offset=$(expr ${offset} \* ${SECTOR_BYTES}) \
-		--sizelimit=$(expr ${size} \* ${SECTOR_BYTES}) ||
+	# Convert to bytes; that's the unit "losetup" wants.  Check
+	# for 0 here to avoid non-zero exit status for "expr".
+	[ ${offset} -ne 0 ] && offset=$(expr ${offset} \* ${SECTOR_BYTES})
+	[ ${size} -gt 0 ] || nope "loop device size must be non-zero"
+	size=$(expr ${size} \* ${SECTOR_BYTES})
+	sudo losetup ${LOOP} ${IMAGE} --offset=${offset} --sizelimit=${size} ||
 	nope "unable to set up loop device ${LOOP} on image file ${IMAGE}"
 	LOOP_ATTACHED=yes
 }
@@ -154,16 +157,17 @@ function partition_init() {
 function partition_define() {
 	local part_size=$1
 	local part_fstype=$2
-	local mount_point
 	local part_offset=${DISK_OFFSET}	# might change, below
-	local remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
 	local part_number=$(expr ${PART_COUNT} + 1)
 	local need_boot_record	# By default, no
+	local remaining
+	local mount_point
 
 	[ ${part_size} -ne 0 ] || nope "partition size must be non-zero"
 
-	[ ${remaining} -gt 0 ] || nope "disk space exhausted"
+	[ ${EMMC_SIZE} -gt ${DISK_OFFSET} ] || nope "disk space exhausted"
 
+	remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
 	if [ $# -gt 2 ]; then
 		[ "${3:0:1}" != / ] && nope "bad mount point \"$3\""
 		mount_point=$3
@@ -174,6 +178,7 @@ function partition_define() {
 	# others are preceded by a 1-sector EBR.  In other words, all
 	# partitions but 2 and 3 require a sector to hold a boot record.
 	if [ ${part_number} -ne 2 -a ${part_number} -ne 3 ]; then
+		[ ${remaining} -gt 1 ] || nope "disk space exhausted (extended)"
 		remaining=$(expr ${remaining} - 1)
 		need_boot_record=yes
 	fi
@@ -224,8 +229,9 @@ function partition_define() {
 
 function partition_check_alignment() {
 	local part_number=$1
+	local offset=${PART_OFFSET[${part_number}]}
 	local prev_number
-	local unaligned
+	local excess
 	local recommended
 
 	# We expect partition 1 to start at unaligned offset 1, and extended
@@ -233,16 +239,16 @@ function partition_check_alignment() {
 	# logical partition is aligned.
 	[ ${part_number} -eq 1 -o ${part_number} -eq 4 ] && return
 
-	# If the partition is aligned we're fine
-	unaligned=$(expr ${PART_OFFSET[${part_number}]} % ${PART_ALIGNMENT})
-	if [ ${unaligned} -eq 0 ]; then
+	# If the partition is aligned we're fine; use "expr" status
+	if ! expr ${offset} % ${PART_ALIGNMENT} > /dev/null; then
 		return;
 	fi
 
-	# Report a warning, and make it helpful.  (The whole point here.)
+	# Report a warning, and make it helpful.
 	prev_number=$(expr ${part_number} - 1)
 	[ ${part_number} -eq 5 ] && prev_number=3
-	recommended=$(expr ${PART_SIZE[${prev_number}]} - ${unaligned})
+	excess=$(expr ${offset} % ${PART_ALIGNMENT})
+	recommended=$(expr ${PART_SIZE[${prev_number}]} - ${excess})
 	echo Warning: partition ${part_number} is not well aligned.
 	echo -n "  Recommend changing partition ${prev_number} size "
 	echo to ${recommended} or $(expr ${recommended} + ${PART_ALIGNMENT})
@@ -253,7 +259,6 @@ function partition_check_alignment() {
 function partition_validate() {
 	local loader_bytes=$(expr $(file_bytes ${L_LOADER}) - ${SECTOR_BYTES})
 	local loader_part_bytes=$(expr ${PART_SIZE[1]} \* ${SECTOR_BYTES});
-	local remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
 	local i
 
 	[ ${loader_bytes} -le ${loader_part_bytes} ] ||
@@ -262,11 +267,11 @@ function partition_validate() {
 	for i in $(seq 1 ${PART_COUNT}); do
 		partition_check_alignment $i
 	done
-	# Warn if there's some unused space on the disk
-	if [ ${remaining} -gt 0 ]; then
-		echo Warning: ${remaining} unused sectors on disk.
+	# Warn if there's some unused space on the disk; use "expr" status
+	if expr ${EMMC_SIZE} - ${DISK_OFFSET} > /dev/null; then
+		echo Warning: unused sectors on disk.
 		echo -n "  Recommend increasing partition ${PART_COUNT} size "
-		echo "to $(expr ${PART_SIZE} + ${remaining})"
+		echo "to $(expr ${EMMC_SIZE} - ${PART_OFFSET[${PART_COUNT}]})"
 	fi
 }
 
@@ -587,7 +592,7 @@ function save_partition() {
 	local count=1;
 	local limit=$(howmany ${size} ${chunk_size})
 
-	while [ ${size} -gt 0 ]; do
+	while true; do
 		local filename=${part_name}.${count}-of-${limit};
 		local filepath=${OUTDIR}/${filename}
 
@@ -600,9 +605,10 @@ function save_partition() {
 		nope "failed to save ${filename}"
 		installer_add_file ${filename} ${offset}
 
-		size=$(expr ${size} - ${chunk_size})
-		offset=$(expr ${offset} + ${chunk_size})
 		count=$(expr ${count} + 1)
+		offset=$(expr ${offset} + ${chunk_size})
+		# Exit loop when it's all written; use "expr" exit status
+		size=$(expr ${size} - ${chunk_size}) || break
 	done
 }
 
