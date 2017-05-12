@@ -38,6 +38,15 @@ INSTALL_SCRIPT=install	# for U-boot to run on the target
 
 ###############
 
+function usage() {
+	echo >&2
+	echo "${PROGNAME}: $@" >&2
+	echo >&2
+	echo "Usage: ${PROGNAME} <rootfs_image>.tar.gz" >&2
+	echo >&2
+	exit 1
+}
+
 function suser() {
 	echo
 	echo To continue, superuser credentials are required.
@@ -621,14 +630,8 @@ function save_partition() {
 # Clean up in case we're killed or interrupted in a fairly normal way
 trap trap_cleanup ERR SIGHUP SIGINT SIGQUIT SIGTERM
 
-if [ $# -ne 1 ]; then
-	echo >&2
-	echo "${PROGNAME}: no root file system image supplied" >&2
-	echo >&2
-	echo "Usage: ${PROGNAME} <rootfs_image>.tar.gz" >&2
-	echo >&2
-	exit 1
-fi
+# Make sure a root file system image was supplied
+[ $# -ne 1 ] && usage "no root file system image supplied"
 ROOT_FS_ARCHIVE=$1
 
 echo
