@@ -3,7 +3,7 @@
 PROGNAME=$(basename $0)
 
 # "Sizes" are all in sectors.  Otherwise we call it "bytes".
-SECTOR=512
+SECTOR_BYTES=512
 EMMC_SIZE=15269888	# 7456 MB in sectors (not hex)
 
 CHUNK_SIZE=524288	# Partition image chuck size in sectors (not hex)
@@ -124,8 +124,8 @@ function loop_attach() {
 	local size=$2
 
 	sudo losetup ${LOOP} ${IMAGE} \
-		--offset=$(expr ${offset} \* ${SECTOR}) \
-		--sizelimit=$(expr ${size} \* ${SECTOR}) ||
+		--offset=$(expr ${offset} \* ${SECTOR_BYTES}) \
+		--sizelimit=$(expr ${size} \* ${SECTOR_BYTES}) ||
 	nope "unable to set up loop device ${LOOP} on image file ${IMAGE}"
 	LOOP_ATTACHED=yes
 }
@@ -239,8 +239,8 @@ function partition_check_alignment() {
 # Only one thing to validate right now.  The loader file (without MBR)
 # must fit in the first partition.  Warn for non-aligned partitions.
 function partition_validate() {
-	local loader_bytes=$(expr $(file_bytes ${L_LOADER}) - ${SECTOR})
-	local loader_part_bytes=$(expr ${PART_SIZE[1]} \* ${SECTOR});
+	local loader_bytes=$(expr $(file_bytes ${L_LOADER}) - ${SECTOR_BYTES})
+	local loader_part_bytes=$(expr ${PART_SIZE[1]} \* ${SECTOR_BYTES});
 	local remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
 	local i
 
@@ -283,7 +283,7 @@ function partition_show() {
 		fi
 		echo
 	done
-	echo "Total EMMC size is ${EMMC_SIZE} ${SECTOR}-byte sectors"
+	echo "Total EMMC size is ${EMMC_SIZE} ${SECTOR_BYTES}-byte sectors"
 }
 
 function partition_mkfs() {
@@ -333,7 +333,7 @@ function disk_partition() {
 
 	# Create an empty image file the same size as our target eMMC
 	rm -f ${IMAGE} || echo "unable to remove image file \"${IMAGE}\""
-	truncate -s $(expr ${EMMC_SIZE} \* ${SECTOR}) ${IMAGE} ||
+	truncate -s $(expr ${EMMC_SIZE} \* ${SECTOR_BYTES}) ${IMAGE} ||
 	nope "unable to create empty image file \"${IMAGE}\""
 	loop_attach 0 ${EMMC_SIZE}
 
@@ -396,7 +396,7 @@ function fstab_add() {
 # "l-loader" isn't too large for the first partition; it's OK if it's smaller.
 function loader_create() {
 	dd if=${L_LOADER} of=${LOADER} status=none \
-		bs=${SECTOR} skip=1 count=${PART_SIZE[1]} ||
+		bs=${SECTOR_BYTES} skip=1 count=${PART_SIZE[1]} ||
 	nope "failed to create loader"
 }
 
@@ -410,7 +410,7 @@ function populate_loader() {
 
 	# Just copy in the loader file we already created
 	sudo dd if=${LOADER} of=${LOOP} status=none \
-			bs=${SECTOR} count=${PART_SIZE[1]} ||
+			bs=${SECTOR_BYTES} count=${PART_SIZE[1]} ||
 	nope "unable to save loader partition"
 
 	loop_detach
@@ -473,7 +473,7 @@ function populate_boot() {
 
 	# Save a copy of our loader partition into a file in /boot
 	sudo dd if=${LOADER} of=${MOUNT}/${LOADER} status=none \
-			bs=${SECTOR} count=${PART_SIZE[${part_number}]} ||
+			bs=${SECTOR_BYTES} count=${PART_SIZE[${part_number}]} ||
 	nope "failed to save loader to boot partition"
 	# Now copy in the kernel image, DTB, and extlinux directories
 	sudo cp ${KERNEL_IMAGE} ${MOUNT} ||
@@ -519,7 +519,7 @@ function installer_add_file() {
 	local offset=$(printf "0x%08x" $2)
 	local filepath=${OUTDIR}/${filename};
 	local bytes=$(file_bytes ${filepath});
-	local hex_size=$(printf "0x%08x" $(expr ${bytes} / ${SECTOR}));
+	local hex_size=$(printf "0x%08x" $(expr ${bytes} / ${SECTOR_BYTES}));
 
 	gzip ${filepath}
 
@@ -554,7 +554,7 @@ function save_boot_record() {
 	local offset=$2;	# sectors
 
 	dd if=${IMAGE} of=${filepath} status=none \
-		bs=${SECTOR} skip=${offset} count=1 ||
+		bs=${SECTOR_BYTES} skip=${offset} count=1 ||
 	nope "failed to save boot record ${filename}"
 	installer_add_file ${filename} ${offset}
 
@@ -582,7 +582,7 @@ function save_partition() {
 		fi
 		echo "- ${filename} (${chunk_size} sectors)"
 		dd if=${IMAGE} of=${filepath} status=none \
-			bs=${SECTOR} skip=${offset} count=${chunk_size} ||
+			bs=${SECTOR_BYTES} skip=${offset} count=${chunk_size} ||
 		nope "failed to save ${filename}"
 		installer_add_file ${filename} ${offset}
 
