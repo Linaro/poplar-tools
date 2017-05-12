@@ -90,10 +90,19 @@ function file_bytes() {
 	stat --format="%s" ${filename} || nope "unable to stat \"${filename}\""
 }
 
-# Make sure we have all our input files
-function input_file_validate() {
+# Make sure we have all our input files, and don't clobber anything
+function file_validate() {
 	local file
 
+	# Don't kill anything that already exists.  Tell the user
+	# that they must be removed instead.
+	for i in MOUNT LOADER IMAGE USB_IMG; do
+		file=$(eval echo \${$i})
+		[ -e ${file} ] &&
+		nope "$i file \"$file\" exists it must be removed to continue"
+	done
+
+	# Make sure all the input files we need *do* exist and are readable
 	for i in L_LOADER USB_LOADER ROOT_FS_ARCHIVE KERNEL_IMAGE \
 			DEVICE_TREE_BINARY; do
 		file=$(eval echo \${$i})
@@ -332,7 +341,7 @@ function disk_init() {
 	echo "NOTE: ${LOOP} (backed by image file \"${IMAGE}\") will be"
 	echo "      partitioned (i.e., OVERWRITTEN)!"
 	echo
-	echo "ARE YOU SURE YOU WANT TO OVERWRITE \"${LOOP}\" and \"${IMAGE}\"?"
+	echo "ARE YOU SURE YOU WANT TO OVERWRITE \"${LOOP}\"?"
 	echo
 	echo -n "Please type \"yes\" to proceed: "
 	read -i no x
@@ -623,11 +632,7 @@ echo
 echo ====== Poplar recovery image builder ======
 echo
 
-# Don't kill anything that already exists.  Tell the user that they
-# must be removed instead.
-[ -e ${MOUNT} ] && nope "\"${MOUNT}\" exists; it must be removed to continue"
-
-input_file_validate
+file_validate
 
 partition_init
 
