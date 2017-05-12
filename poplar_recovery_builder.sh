@@ -55,11 +55,6 @@ function suser() {
 	SUSER=yes
 }
 
-function nosuser() {
-	sudo -k || nope "failed to drop superuser privilege"
-	unset SUSER
-}
-
 function cleanup() {
 	rm -rf ${MOUNT}
 	rm -f ${IMAGE}
@@ -69,7 +64,6 @@ function cleanup() {
 function trap_cleanup() {
 	[ "${LOOP_MOUNTED}" ] && sudo umount ${LOOP}
 	[ "${LOOP_ATTACHED}" ] && loop_detach
-	[ "${SUSER}" ] && nosuser
 	cleanup
 }
 
@@ -668,9 +662,6 @@ populate_loader
 populate_root ${PART_ROOT}
 populate_boot ${PART_BOOT}
 # We won't populate the other file systems for now
-
-# Nothing else requires superuser privilege
-nosuser
 
 # Initialize the installer script
 installer_init
