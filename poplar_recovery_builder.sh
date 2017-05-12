@@ -73,6 +73,14 @@ function nope() {
 	exit 1
 }
 
+function howmany() {
+	local total_size=$1
+	local unit_size=$2
+
+	[ ${unit_size} -gt 0 ] || nope "bad unit_size ${unit_size} in howmany()"
+	expr \( ${total_size} + ${unit_size} - 1 \) / ${unit_size}
+}
+
 function file_bytes() {
 	local filename=$1
 
@@ -572,7 +580,7 @@ function save_partition() {
 	local size=${PART_SIZE[${part_number}]}
 	local chunk_size=${CHUNK_SIZE}
 	local count=1;
-	local limit=$(expr \( ${size} + ${chunk_size} - 1 \) / ${chunk_size})
+	local limit=$(howmany ${size} ${chunk_size})
 
 	while [ ${size} -gt 0 ]; do
 		local filename=${part_name}.${count}-of-${limit};
