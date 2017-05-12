@@ -156,6 +156,7 @@ function loop_attach() {
 
 function loop_detach() {
 	sudo losetup -d ${LOOP} || nope "failed to detach ${LOOP}"
+	sudo rm -f ${LOOP}p?    # Linux doesn't remove partitions we created
 	unset LOOP_ATTACHED
 }
 
@@ -328,7 +329,6 @@ function partition_mount() {
 }
 
 function partition_unmount() {
-	sync
 	sudo umount ${LOOP} || nope "unable to unmount partition"
 	unset LOOP_MOUNTED
 }
@@ -374,12 +374,10 @@ function disk_partition() {
 		[ "${PART_BOOT}" ] && echo "set ${PART_BOOT} boot on";	\
 		echo quit;						\
 	} | sudo parted ${LOOP} || nope "failed to partition image"
-	sync
 }
 
 function disk_finish() {
 	loop_detach
-	sudo rm -f ${LOOP}p?    # Linux doesn't remove partitions we created
 }
 
 function fstab_init() {
