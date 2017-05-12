@@ -14,7 +14,7 @@ EMMC_IO_BYTES=0x100000	# EMMC write buffer size in bytes (hex)
 EMMC_DEV=/dev/mmcblk0	# Linux path to main eMMC device on target
 
 # Recommended alignment (in sectors) for partitions other than 1 and 4
-PART_ALIGNMENT=$(expr \( 1024 \* 1024 \) / ${SECTOR})
+PART_ALIGNMENT=2048	# Align at 1MB (512-byte sectors)
 
 # Input files
 # The "l-loader.bin" boot loader package
@@ -47,7 +47,7 @@ function suser() {
 
 function nosuser() {
 	sudo -k || nope "failed to drop superuser privilege"
-	SUSER=no
+	unset SUSER
 }
 
 function cleanup() {
@@ -57,11 +57,9 @@ function cleanup() {
 }
 
 function trap_cleanup() {
-	if [ "${SUSER}" = yes ]; then
-		sudo umount ${LOOP}
-		loop_detach
-		nosuser
-	fi
+	[ "${LOOP_MOUNTED}" ] && sudo umount ${LOOP}
+	[ "${LOOP_ATTACHED}" ] && loop_detach
+	[ "${SUSER}" ] && nosuser
 	cleanup
 }
 
@@ -129,10 +127,12 @@ function loop_attach() {
 		--offset=$(expr ${offset} \* ${SECTOR}) \
 		--sizelimit=$(expr ${size} \* ${SECTOR}) ||
 	nope "unable to set up loop device ${LOOP} on image file ${IMAGE}"
+	LOOP_ATTACHED=yes
 }
 
 function loop_detach() {
 	sudo losetup -d ${LOOP} || nope "failed to detach ${LOOP}"
+	unset LOOP_ATTACHED
 }
 
 function partition_init() {
@@ -149,7 +149,7 @@ function partition_define() {
 	local part_number=$(expr ${PART_COUNT} + 1)
 	local need_boot_record	# By default, no
 
-	[ ${remaining} -gt 0 ] || nope "no more partition space available"
+	[ ${remaining} -gt 0 ] || nope "disk space exhausted"
 
 	if [ $# -gt 2 ]; then
 		[ "${3:0:1}" != / ] && nope "bad mount point \"$3\""
@@ -240,13 +240,13 @@ function partition_check_alignment() {
 # must fit in the first partition.  Warn for non-aligned partitions.
 function partition_validate() {
 	local loader_bytes=$(expr $(file_bytes ${L_LOADER}) - ${SECTOR})
-	local part_bytes=$(expr ${PART_SIZE[1]} \* ${SECTOR});
+	local loader_part_bytes=$(expr ${PART_SIZE[1]} \* ${SECTOR});
 	local remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
 	local i
 
-	[ ${loader_bytes} -le ${part_bytes} ] ||
+	[ ${loader_bytes} -le ${loader_part_bytes} ] ||
 	nope "loader is too big for partition 1" \
-		"(${loader_bytes} > ${part_bytes} bytes)"
+		"(${loader_bytes} > ${loader_part_bytes} bytes)"
 	for i in $(seq 1 ${PART_COUNT}); do
 		partition_check_alignment $i
 	done
@@ -301,11 +301,13 @@ function partition_mount() {
 
 	sudo mount ${LOOP} ${MOUNT} ||
 	nope "unable to mount partition ${part_number}"
+	LOOP_MOUNTED=yes
 }
 
 function partition_unmount() {
 	sync
 	sudo umount ${LOOP} || nope "unable to unmount partition"
+	unset LOOP_MOUNTED
 }
 
 # Ask the user to verify whether to continue, for safety
@@ -512,7 +514,7 @@ function installer_update() {
 
 function installer_add_file() {
 	local filename=$1;
-	local offset=$(printf "0x%08x" ${2})
+	local offset=$(printf "0x%08x" $2)
 	local filepath=${OUTDIR}/${filename};
 	local bytes=$(file_bytes ${filepath});
 	local hex_size=$(printf "0x%08x" $(expr ${bytes} / ${SECTOR}));
