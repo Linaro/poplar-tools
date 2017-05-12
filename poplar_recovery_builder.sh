@@ -316,6 +316,8 @@ function disk_init() {
 	echo "NOTE: ${LOOP} (backed by image file \"${IMAGE}\") will be"
 	echo "      partitioned (i.e., OVERWRITTEN)!"
 	echo
+	echo "ARE YOU SURE YOU WANT TO OVERWRITE \"${LOOP}\" and \"${IMAGE}\"?"
+	echo
 	echo -n "Please type \"yes\" to proceed: "
 	read -i no x
 	[ "${x}" = "yes" ] || nope "aborted by user"
@@ -599,8 +601,11 @@ echo
 echo ====== Poplar recovery image builder ======
 echo
 
-# We'll be creating these; silently get rid of them if they exist
-rm -rf ${MOUNT} ${OUTDIR}
+# Don't kill anything that already exists.  Tell the user that they
+# must be removed instead.
+[ -e ${MOUNT} ] && nope "\"${MOUNT}\" exists; it must be removed to continue"
+[ -e ${OUTDIR} ] && nope "\"${OUTDIR}\" exists; it must be removed to continue"
+
 input_file_validate
 
 partition_init
