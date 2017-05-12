@@ -323,12 +323,7 @@ function partition_mkfs() {
 }
 
 function partition_mount() {
-	local part_number=$1
-	local part_offset=${PART_OFFSET[${part_number}]}
-	local part_size=${PART_SIZE[${part_number}]}
-
-	sudo mount ${LOOP} ${MOUNT} ||
-	nope "unable to mount partition ${part_number}"
+	sudo mount ${LOOP} ${MOUNT} || nope "unable to mount partition"
 	LOOP_MOUNTED=yes
 }
 
@@ -451,7 +446,7 @@ function populate_root() {
 
 	loop_attach ${PART_OFFSET[${part_number}]} ${PART_SIZE[${part_number}]}
 	partition_mkfs ${part_number}
-	partition_mount ${part_number}
+	partition_mount
 
 	# The tar file containing the root file system uses "binary"
 	# as it's root directory; that'll be our mount point.  Mount
@@ -497,7 +492,7 @@ function populate_boot() {
 
 	loop_attach ${PART_OFFSET[${part_number}]} ${PART_SIZE[${part_number}]}
 	partition_mkfs ${part_number}
-	partition_mount ${part_number}
+	partition_mount
 
 	# Save a copy of our loader partition into a file in /boot
 	sudo dd if=${LOADER} of=${MOUNT}/${LOADER} status=none \
