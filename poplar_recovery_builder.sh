@@ -23,7 +23,6 @@ PART_ALIGNMENT=2048	# Align at 1MB (512-byte sectors)
 L_LOADER=l-loader.bin
 # In case the USB boot loader is different from what we want on eMMC
 USB_LOADER=${L_LOADER}	# Must be full l-loader.bin (including first sector)
-ROOT_FS_ARCHIVE=linaro-stretch-developer-20170511-60.tar.gz
 KERNEL_IMAGE=Image
 DEVICE_TREE_BINARY=hi3798cv200-poplar.dtb
 # Initial ramdisk is optional; don't define it if it's not set
@@ -524,6 +523,9 @@ function installer_init() {
 	cat <<-! > ${OUTDIR}/${INSTALL_SCRIPT} || nope "installer init"
 		# Poplar USB flash drive recovery script
 		# Created $(date)
+		#
+		# Root file system built from:
+		#    ${ROOT_FS_ARCHIVE}
 
 		usb start
 
@@ -618,6 +620,16 @@ function save_partition() {
 
 # Clean up in case we're killed or interrupted in a fairly normal way
 trap trap_cleanup ERR SIGHUP SIGINT SIGQUIT SIGTERM
+
+if [ $# -ne 1 ]; then
+	echo >&2
+	echo "${PROGNAME}: no root file system image supplied" >&2
+	echo >&2
+	echo "Usage: ${PROGNAME} <rootfs_image>.tar.gz" >&2
+	echo >&2
+	exit 1
+fi
+ROOT_FS_ARCHIVE=$1
 
 echo
 echo ====== Poplar recovery image builder ======
