@@ -172,7 +172,7 @@ package a USB recovery device.
   earlier (whose name will be different from what's shown below).
 
     # This produces one output file, which is written to a USB flash drive:
-    #       poplar_recovery_usb.img
+    #       usb_recovery.img
     bash ./poplar_recovery_builder.sh \
 		    linaro-stretch-developer-20170504-58.tar.gz
 
@@ -211,7 +211,7 @@ package a USB recovery device.
 - You will need superuser access.  And you'll need to answer "yes".
 
     read -i no -p "Overwrite ${USBDISK} (please type \"yes\")? " x
-    [ ${x} = yes ] && sudo dd if=poplar_recovery_usb.img of=${USBDISK}
+    [ ${x} = yes ] && sudo dd if=usb_recovery.img of=${USBDISK}
 
 - Eject the USB flash drive,
 

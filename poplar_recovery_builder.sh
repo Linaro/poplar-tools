@@ -34,7 +34,7 @@ MOUNT=binary		# mount point for disk image; also output directory
 
 # This is the ultimate output file
 USB_SIZE=15000000	# About 7.5 GB in sectors
-USB_IMG=poplar_recovery_usb.img
+USB_IMG=usb_recovery.img
 
 # content that gets transferred to USB stick
 
