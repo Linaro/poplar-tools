@@ -28,9 +28,15 @@ DEVICE_TREE_BINARY=hi3798cv200-poplar.dtb
 # Initial ramdisk is optional; don't define it if it's not set
 # INIT_RAMDISK=initrd.img		# a cpio.gz file
 
-# Output files
-IMAGE=disk_image	# disk image file (temporary)
+# Temporary output files
+IMAGE=disk_image	# disk image file
 MOUNT=binary		# mount point for disk image; also output directory
+
+# This is the ultimate output file
+USB_SIZE=15000000	# About 7.5 GB in sectors
+USB_IMG=poplar_recovery_usb.img
+
+# content that gets transferred to USB stick
 
 LOADER=loader.bin	# in /boot on target; omits 1st sector of l-loader.bin
 INSTALL_SCRIPT=install	# for U-boot to run on the target
@@ -52,6 +58,19 @@ function suser() {
 	sudo -k || nope "failed to kill superuser privilege"
 	sudo -v || nope "failed to get superuser privilege"
 	SUSER=yes
+}
+
+function suser_dd() {
+	local dd_args=$*
+
+	sudo dd ${dd_args} status=none || nope "error writing \"$1\""
+}
+
+function suser_append() {
+	local file=$*
+
+	sudo dd of=${file} oflag=append conv=notrunc status=none ||
+	nope "error appending to  \"$file\""
 }
 
 function cleanup() {
@@ -384,8 +403,7 @@ function disk_finish() {
 
 function fstab_init() {
 	echo "# /etc/fstab: static file system information." |
-	sudo dd of=${MOUNT}/etc/fstab status=none ||
-	nope "failed to initialize fstab"
+	suser_dd of=${MOUNT}/etc/fstab
 }
 
 function fstab_add() {
@@ -405,8 +423,7 @@ function fstab_add() {
 
 	printf "${EMMC_DEV}p%u\t%s\t%s\t%s\n" ${part_number} ${mount_point} \
 			${fstype} defaults |
-	sudo dd of=${MOUNT}/etc/fstab oflag=append conv=notrunc status=none ||
-	nope "failed to add partition ${part_number} to fstab"
+	suser_append ${MOUNT}/etc/fstab
 }
 
 # Create the loader file.  It is always in partition 1.
@@ -429,12 +446,12 @@ function loader_remove() {
 
 # Fill the loader partition.  Always partition 1.
 function populate_loader() {
-	loop_attach ${PART_OFFSET[1]} ${PART_SIZE[1]}
+	local size=${PART_SIZE[1]}
+
+	loop_attach ${PART_OFFSET[1]} ${size}
 
 	# Just copy in the loader file we already created
-	sudo dd if=${LOADER} of=${LOOP} status=none \
-			bs=${SECTOR_BYTES} count=${PART_SIZE[1]} ||
-	nope "unable to save loader partition"
+	suser_dd if=${LOADER} of=${LOOP} bs=${SECTOR_BYTES} count=${size}
 
 	loop_detach
 }
@@ -487,17 +504,18 @@ function bootscript_create() {
 
 function populate_boot() {
 	local part_number=$1
+	local size=${PART_SIZE[${part_number}]}
 
 	echo "- /boot"
 
-	loop_attach ${PART_OFFSET[${part_number}]} ${PART_SIZE[${part_number}]}
+	loop_attach ${PART_OFFSET[${part_number}]} ${size}
 	partition_mkfs ${part_number}
 	partition_mount
 
 	# Save a copy of our loader partition into a file in /boot
-	sudo dd if=${LOADER} of=${MOUNT}/${LOADER} status=none \
-			bs=${SECTOR_BYTES} count=${PART_SIZE[${part_number}]} ||
-	nope "failed to save loader to boot partition"
+	cat ${LOADER} |
+	suser_dd of=${MOUNT}/${LOADER} bs=${SECTOR_BYTES} count=${size}
+
 	# Now copy in the kernel image, DTB, and extlinux directories
 	sudo cp ${KERNEL_IMAGE} ${MOUNT} ||
 	nope "failed to save kernel to boot partition"
@@ -512,9 +530,40 @@ function populate_boot() {
 	sudo mkdir -p ${MOUNT}/extlinux ||
 	nope "failed to save extlinux directory to boot partition"
 	bootscript_create |
-	sudo dd of=${MOUNT}/extlinux/extlinux.conf status=none ||
-	nope "failed to save extlinux.conf to boot partition"
+	suser_dd of=${MOUNT}/extlinux/extlinux.conf
 
+	partition_unmount
+	loop_detach
+}
+
+# Set up for building our USB image.  It will be formatted to have a
+# single FAT32 partition.
+function image_init() {
+	local mkfs_command=$(fstype_mkfs vfat)
+
+	# First partition the disk
+	truncate -s $(expr ${USB_SIZE} \* ${SECTOR_BYTES}) ${USB_IMG} ||
+	nope "unable to create empty USB image file \"${IMAGE}\""
+	loop_attach 0 ${USB_SIZE}
+
+	# Partition our USB image.
+	# Note: Do *not* use --script to "parted"; it caused problems...
+	{								\
+		echo mklabel msdos;					\
+		echo unit s;						\
+		echo mkpart primary fat32 1 -1;				\
+		echo "set 1 boot on";					\
+	} | sudo parted ${LOOP} || nope "failed to partition USB image"
+	loop_detach
+
+	# Set up loop device on our sole partition, create a FAT32
+	# file system, and mount it
+	loop_attach 1 $(expr ${USB_SIZE} - 1)
+	sudo ${mkfs_command} ${LOOP} || nope "unable to mkfs USB partition"
+	partition_mount
+}
+
+function image_finish() {
 	partition_unmount
 	loop_detach
 }
@@ -523,7 +572,8 @@ function installer_init() {
 	echo
 	echo === generating installation files ===
 
-	cat <<-! > ${MOUNT}/${INSTALL_SCRIPT} || nope "installer init"
+	sudo cp /dev/null ${MOUNT}/${INSTALL_SCRIPT}
+	cat <<-! | suser_append ${MOUNT}/${INSTALL_SCRIPT}
 		# Poplar USB flash drive recovery script
 		# Created $(date)
 		#
@@ -536,7 +586,7 @@ function installer_init() {
 }
 
 function installer_update() {
-	echo "$@" >> ${MOUNT}/${INSTALL_SCRIPT} || nope "installer update"
+	echo "$@" | suser_append ${MOUNT}/${INSTALL_SCRIPT}
 }
 
 function installer_add_file() {
@@ -547,7 +597,7 @@ function installer_add_file() {
 	local size=$(howmany ${bytes} ${SECTOR_BYTES})
 	local hex_size=$(printf "0x%08x" ${size})
 
-	gzip ${filepath}
+	sudo gzip ${filepath}
 
 	installer_update "fatsize usb 0:0 ${filename}.gz"
 	installer_update "fatload usb 0:0 ${IN_ADDR} ${filename}.gz"
@@ -558,7 +608,7 @@ function installer_add_file() {
 }
 
 function installer_finish() {
-	cat <<-! >> ${MOUNT}/${INSTALL_SCRIPT} || nope "installer finish"
+	sudo cat <<-! | suser_append ${MOUNT}/${INSTALL_SCRIPT}
 	
 
 		echo ============== INSTALLATION IS DONE ===============
@@ -568,7 +618,7 @@ function installer_finish() {
 	echo
 	echo === building installer ===
 	# Naming the "compiled" script "boot.scr" makes it auto-boot
-	mkimage -T script -A arm64 -C none -n 'Poplar Recovery' \
+	sudo mkimage -T script -A arm64 -C none -n 'Poplar Recovery' \
 		-d ${MOUNT}/${INSTALL_SCRIPT} \
 		${MOUNT}/${INSTALL_SCRIPT}.scr ||
 	nope "failed to build installer image"
@@ -579,9 +629,8 @@ function save_boot_record() {
 	local filepath=${MOUNT}/${filename};
 	local offset=$2;	# sectors
 
-	dd if=${IMAGE} of=${filepath} status=none \
-		bs=${SECTOR_BYTES} skip=${offset} count=1 ||
-	nope "failed to save boot record ${filename}"
+	suser_dd if=${IMAGE} of=${filepath} bs=${SECTOR_BYTES} \
+			skip=${offset} count=1
 	installer_add_file ${filename} ${offset}
 
 }
@@ -607,9 +656,8 @@ function save_partition() {
 			chunk_size=${size}
 		fi
 		echo "- ${filename} (${chunk_size} sectors)"
-		dd if=${IMAGE} of=${filepath} status=none \
-			bs=${SECTOR_BYTES} skip=${offset} count=${chunk_size} ||
-		nope "failed to save ${filename}"
+		suser_dd if=${IMAGE} of=${filepath} bs=${SECTOR_BYTES} \
+				skip=${offset} count=${chunk_size}
 		installer_add_file ${filename} ${offset}
 
 		count=$(expr ${count} + 1)
@@ -648,7 +696,7 @@ partition_show
 # Create our loader file (the same size as partition 1)
 loader_create
 
-# To do partitioning we need superuser privilege
+# To go any further we need superuser privilege
 suser
 
 loop_init
@@ -665,11 +713,14 @@ populate_root ${PART_ROOT}
 populate_boot ${PART_BOOT}
 # We won't populate the other file systems for now
 
+# Set up for building our USB image
+image_init
+
 # Initialize the installer script
 installer_init
 
 # First, we need "fastboot.bin" on the USB stick for it to be bootable.
-cp ${USB_LOADER} ${MOUNT}/fastboot.bin
+sudo cp ${USB_LOADER} ${MOUNT}/fastboot.bin
 
 # Start with the partitioning metadata--MBR and all EBRs
 save_boot_record mbr 0
@@ -686,8 +737,10 @@ done
 
 installer_finish
 
+# for building our USB image
+image_finish
+
 echo ====== Poplar recovery image builder done! ======
-echo "(Please copy all files in \"${MOUNT}\" to your USB stick)"
 
 cleanup
 
