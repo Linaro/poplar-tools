@@ -30,8 +30,7 @@ DEVICE_TREE_BINARY=hi3798cv200-poplar.dtb
 
 # Output files
 IMAGE=disk_image	# disk image file (temporary)
-MOUNT=binary		# mount point for disk image (temporary)
-OUTDIR=USB		# content that gets transferred to USB stick
+MOUNT=binary		# mount point for disk image; also output directory
 
 LOADER=loader.bin	# in /boot on target; omits 1st sector of l-loader.bin
 INSTALL_SCRIPT=install	# for U-boot to run on the target
@@ -515,8 +514,7 @@ function installer_init() {
 	echo
 	echo === generating installation files ===
 
-	mkdir -p ${OUTDIR}
-	cat <<-! > ${OUTDIR}/${INSTALL_SCRIPT} || nope "installer init"
+	cat <<-! > ${MOUNT}/${INSTALL_SCRIPT} || nope "installer init"
 		# Poplar USB flash drive recovery script
 		# Created $(date)
 		#
@@ -529,13 +527,13 @@ function installer_init() {
 }
 
 function installer_update() {
-	echo "$@" >> ${OUTDIR}/${INSTALL_SCRIPT} || nope "installer update"
+	echo "$@" >> ${MOUNT}/${INSTALL_SCRIPT} || nope "installer update"
 }
 
 function installer_add_file() {
 	local filename=$1;
 	local offset=$(printf "0x%08x" $2)
-	local filepath=${OUTDIR}/${filename};
+	local filepath=${MOUNT}/${filename};
 	local bytes=$(file_bytes ${filepath});
 	local size=$(howmany ${bytes} ${SECTOR_BYTES})
 	local hex_size=$(printf "0x%08x" ${size})
@@ -551,7 +549,7 @@ function installer_add_file() {
 }
 
 function installer_finish() {
-	cat <<-! >> ${OUTDIR}/${INSTALL_SCRIPT} || nope "installer finish"
+	cat <<-! >> ${MOUNT}/${INSTALL_SCRIPT} || nope "installer finish"
 	
 
 		echo ============== INSTALLATION IS DONE ===============
@@ -562,14 +560,14 @@ function installer_finish() {
 	echo === building installer ===
 	# Naming the "compiled" script "boot.scr" makes it auto-boot
 	mkimage -T script -A arm64 -C none -n 'Poplar Recovery' \
-		-d ${OUTDIR}/${INSTALL_SCRIPT} \
-		${OUTDIR}/${INSTALL_SCRIPT}.scr ||
+		-d ${MOUNT}/${INSTALL_SCRIPT} \
+		${MOUNT}/${INSTALL_SCRIPT}.scr ||
 	nope "failed to build installer image"
 }
 
 function save_boot_record() {
 	local filename=$1;
-	local filepath=${OUTDIR}/${filename};
+	local filepath=${MOUNT}/${filename};
 	local offset=$2;	# sectors
 
 	dd if=${IMAGE} of=${filepath} status=none \
@@ -594,7 +592,7 @@ function save_partition() {
 
 	while true; do
 		local filename=${part_name}.${count}-of-${limit};
-		local filepath=${OUTDIR}/${filename}
+		local filepath=${MOUNT}/${filename}
 
 		if [ ${size} -lt ${chunk_size} ]; then
 			chunk_size=${size}
@@ -628,7 +626,6 @@ echo
 # Don't kill anything that already exists.  Tell the user that they
 # must be removed instead.
 [ -e ${MOUNT} ] && nope "\"${MOUNT}\" exists; it must be removed to continue"
-[ -e ${OUTDIR} ] && nope "\"${OUTDIR}\" exists; it must be removed to continue"
 
 input_file_validate
 
@@ -667,7 +664,7 @@ populate_boot ${PART_BOOT}
 installer_init
 
 # First, we need "fastboot.bin" on the USB stick for it to be bootable.
-cp ${USB_LOADER} ${OUTDIR}/fastboot.bin
+cp ${USB_LOADER} ${MOUNT}/fastboot.bin
 
 # Start with the partitioning metadata--MBR and all EBRs
 save_boot_record mbr 0
@@ -685,7 +682,7 @@ done
 installer_finish
 
 echo ====== Poplar recovery image builder done! ======
-echo "(Please copy all files in \"${OUTDIR}\" to your USB stick)"
+echo "(Please copy all files in \"${MOUNT}\" to your USB stick)"
 
 cleanup
 
