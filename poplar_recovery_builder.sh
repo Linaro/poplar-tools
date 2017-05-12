@@ -74,15 +74,11 @@ function suser_append() {
 }
 
 function cleanup() {
-	rm -rf ${MOUNT}
-	rm -f ${IMAGE}
-	loader_remove
-}
-
-function trap_cleanup() {
 	[ "${LOOP_MOUNTED}" ] && sudo umount ${LOOP}
+	rm -rf ${MOUNT}
 	[ "${LOOP_ATTACHED}" ] && loop_detach
-	cleanup
+	rm -f ${LOADER}
+	rm -f ${IMAGE}
 }
 
 function nope() {
@@ -164,14 +160,15 @@ function loop_init() {
 function loop_attach() {
 	local offset=$1
 	local size=$2
+	local file=$3
 
 	# Convert to bytes; that's the unit "losetup" wants.  Check
 	# for 0 here to avoid non-zero exit status for "expr".
 	[ ${offset} -ne 0 ] && offset=$(expr ${offset} \* ${SECTOR_BYTES})
 	[ ${size} -gt 0 ] || nope "loop device size must be non-zero"
 	size=$(expr ${size} \* ${SECTOR_BYTES})
-	sudo losetup ${LOOP} ${IMAGE} --offset=${offset} --sizelimit=${size} ||
-	nope "unable to set up loop device ${LOOP} on image file ${IMAGE}"
+	sudo losetup ${LOOP} ${file} --offset=${offset} --sizelimit=${size} ||
+	nope "unable to set up loop device ${LOOP} on image file ${file}"
 	LOOP_ATTACHED=yes
 }
 
@@ -379,7 +376,7 @@ function disk_partition() {
 	rm -f ${IMAGE} || echo "unable to remove image file \"${IMAGE}\""
 	truncate -s $(expr ${EMMC_SIZE} \* ${SECTOR_BYTES}) ${IMAGE} ||
 	nope "unable to create empty image file \"${IMAGE}\""
-	loop_attach 0 ${EMMC_SIZE}
+	loop_attach 0 ${EMMC_SIZE} ${IMAGE}
 
 	# Partition our disk image.
 	# Note: Do *not* use --script to "parted"; it caused problems...
@@ -440,15 +437,12 @@ function loader_create() {
 	nope "failed to create loader"
 }
 
-function loader_remove() {
-	rm -f ${LOADER}
-}
-
 # Fill the loader partition.  Always partition 1.
 function populate_loader() {
+	local offset=${PART_OFFSET[1]}
 	local size=${PART_SIZE[1]}
 
-	loop_attach ${PART_OFFSET[1]} ${size}
+	loop_attach ${offset} ${size} ${IMAGE}
 
 	# Just copy in the loader file we already created
 	suser_dd if=${LOADER} of=${LOOP} bs=${SECTOR_BYTES} count=${size}
@@ -458,10 +452,12 @@ function populate_loader() {
 
 function populate_root() {
 	local part_number=$1
+	local offset=${PART_OFFSET[${part_number}]}
+	local size=${PART_SIZE[${part_number}]}
 
 	echo "- root file system"
 
-	loop_attach ${PART_OFFSET[${part_number}]} ${PART_SIZE[${part_number}]}
+	loop_attach ${offset} ${size} ${IMAGE}
 	partition_mkfs ${part_number}
 	partition_mount
 
@@ -504,11 +500,12 @@ function bootscript_create() {
 
 function populate_boot() {
 	local part_number=$1
+	local offset=${PART_OFFSET[${part_number}]}
 	local size=${PART_SIZE[${part_number}]}
 
 	echo "- /boot"
 
-	loop_attach ${PART_OFFSET[${part_number}]} ${size}
+	loop_attach ${offset} ${size} ${IMAGE}
 	partition_mkfs ${part_number}
 	partition_mount
 
@@ -540,25 +537,26 @@ function populate_boot() {
 # single FAT32 partition.
 function image_init() {
 	local mkfs_command=$(fstype_mkfs vfat)
+	local offset
 
 	# First partition the disk
 	truncate -s $(expr ${USB_SIZE} \* ${SECTOR_BYTES}) ${USB_IMG} ||
-	nope "unable to create empty USB image file \"${IMAGE}\""
-	loop_attach 0 ${USB_SIZE}
+	nope "unable to create empty USB image file \"${USB_IMG}\""
+	loop_attach 0 ${USB_SIZE} ${USB_IMG}
 
 	# Partition our USB image.
 	# Note: Do *not* use --script to "parted"; it caused problems...
 	{								\
 		echo mklabel msdos;					\
 		echo unit s;						\
-		echo mkpart primary fat32 1 -1;				\
+		echo mkpart primary fat32 1 -1;		\
 		echo "set 1 boot on";					\
 	} | sudo parted ${LOOP} || nope "failed to partition USB image"
 	loop_detach
 
 	# Set up loop device on our sole partition, create a FAT32
 	# file system, and mount it
-	loop_attach 1 $(expr ${USB_SIZE} - 1)
+	loop_attach 1 $(expr ${USB_SIZE} - 1) ${USB_IMG}
 	sudo ${mkfs_command} ${LOOP} || nope "unable to mkfs USB partition"
 	partition_mount
 }
@@ -599,8 +597,8 @@ function installer_add_file() {
 
 	sudo gzip ${filepath}
 
-	installer_update "fatsize usb 0:0 ${filename}.gz"
-	installer_update "fatload usb 0:0 ${IN_ADDR} ${filename}.gz"
+	installer_update "fatsize usb 0:1 ${filename}.gz"
+	installer_update "fatload usb 0:1 ${IN_ADDR} ${filename}.gz"
 	installer_update "unzip ${IN_ADDR} ${OUT_ADDR}"
 	installer_update "mmc write ${OUT_ADDR} ${offset} ${hex_size}"
 	installer_update "echo"
@@ -670,7 +668,7 @@ function save_partition() {
 ############################
 
 # Clean up in case we're killed or interrupted in a fairly normal way
-trap trap_cleanup ERR SIGHUP SIGINT SIGQUIT SIGTERM
+trap cleanup EXIT ERR SIGHUP SIGINT SIGQUIT SIGTERM
 
 # Make sure a root file system image was supplied
 [ $# -ne 1 ] && usage "no root file system image supplied"
