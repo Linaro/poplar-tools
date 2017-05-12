@@ -96,7 +96,10 @@ function input_file_validate() {
 		file=$(eval echo \${$i})
 		[ -f ${file} ] || nope "$i file \"$file\" does not exist"
 		[ -r ${file} ] || nope "$i file \"$file\" is not readable"
+		[ -s ${file} ] || nope "$i file \"$file\" is empty"
 	done
+	[ $(file_bytes ${L_LOADER}) -gt ${SECTOR_BYTES} ] ||
+	nope "l_loader is much too small"
 }
 
 # We use the partition types accepted in /etc/fstab for Linux.
@@ -156,6 +159,8 @@ function partition_define() {
 	local remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
 	local part_number=$(expr ${PART_COUNT} + 1)
 	local need_boot_record	# By default, no
+
+	[ ${part_size} -ne 0 ] || nope "partition size must be non-zero"
 
 	[ ${remaining} -gt 0 ] || nope "disk space exhausted"
 
@@ -226,9 +231,8 @@ function partition_check_alignment() {
 	# We expect partition 1 to start at unaligned offset 1, and extended
 	# partition 4 to be one less than an aligned offset so its first
 	# logical partition is aligned.
-	if [ ${part_number} -eq 1 -o ${part_number} -eq 4 ]; then
-		return;
-	fi
+	[ ${part_number} -eq 1 -o ${part_number} -eq 4 ] && return
+
 	# If the partition is aligned we're fine
 	unaligned=$(expr ${PART_OFFSET[${part_number}]} % ${PART_ALIGNMENT})
 	if [ ${unaligned} -eq 0 ]; then
@@ -528,7 +532,8 @@ function installer_add_file() {
 	local offset=$(printf "0x%08x" $2)
 	local filepath=${OUTDIR}/${filename};
 	local bytes=$(file_bytes ${filepath});
-	local hex_size=$(printf "0x%08x" $(expr ${bytes} / ${SECTOR_BYTES}));
+	local size=$(howmany ${bytes} ${SECTOR_BYTES})
+	local hex_size=$(printf "0x%08x" ${size})
 
 	gzip ${filepath}
 
