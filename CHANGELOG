@@ -4,7 +4,7 @@ Initial release of Poplar code on GitHub.  Current state of the
 git trees:
 
     poplar-tools (commit prior to this one)
-	33f17a1 build_instructions.txt: document workaround
+	d53c301 CHANGELOG: initial version
     poplar-linux
         latest 67a304e99abf hi3798cv200-poplar.dts: add chosen node * bootargs value
     poplar-u-boot
