@@ -1,25 +1,3 @@
-
-######################################################################
-                            TEMPORARY NOTE
-######################################################################
-All of the git repository URLs below now look something like this:
-
-    https://github.com:alexelder/aspen-tools.git
-
-Before we go "live" they will all be updated to look like this:
-
-    https://github.com:linaro/poplar-tools.git
-
-to reflect their final resting place.
-
-In addition, I have described checking out branches named
-"aspen-test".  Instead, we'll plan to have the "latest" branch
-contain the latest code that's we believe to be the best version
-of code for people to use.  That is, if one checks out "latest" of
-all branches and builds them, the result should be expected to work.
-Those names will change in this document before we publish this.
-######################################################################
-
 Building Poplar System Recovery Media From Source
 -------------------------------------------------
 The instructions that follow describe the process for creating a USB
@@ -58,25 +36,25 @@ package a USB recovery device.
 - Get the source code:
 
   cd ${TOP}
-  git clone https://github.com/alexelder/aspen-tools.git
-  git clone https://github.com/alexelder/aspen-linux.git
-  git clone https://github.com/alexelder/aspen-u-boot.git
-  git clone https://github.com/alexelder/aspen-arm-trusted-firmware.git
-  git clone https://github.com/alexelder/aspen-l-loader.git
+  git clone https://github.com/linaro/poplar-tools.git
+  git clone https://github.com/linaro/poplar-linux.git
+  git clone https://github.com/linaro/poplar-u-boot.git
+  git clone https://github.com/linaro/poplar-arm-trusted-firmware.git
+  git clone https://github.com/linaro/poplar-l-loader.git
 
 - Set up branches to use, and make sure everything is clean:
 
-    cd ${TOP}/aspen-linux
-    git checkout -b aspen-test origin/aspen-test
+    cd ${TOP}/poplar-linux
+    git checkout -b poplar-test origin/poplar-test
 
-    cd ${TOP}/aspen-u-boot
-    git checkout -b aspen-test origin/aspen-test
+    cd ${TOP}/poplar-u-boot
+    git checkout -b poplar-test origin/poplar-test
 
-    cd ${TOP}/aspen-arm-trusted-firmware
-    git checkout -b aspen-test origin/aspen-test
+    cd ${TOP}/poplar-arm-trusted-firmware
+    git checkout -b poplar-test origin/poplar-test
 
-    cd ${TOP}/aspen-l-loader
-    git checkout -b aspen-test origin/aspen-test
+    cd ${TOP}/poplar-l-loader
+    git checkout -b poplar-test origin/poplar-test
 
 - Prepare for building.  Almost everything is aarch64, but one item
   (l-loader.bin) must be built for 32-bit ARM.  Set up environment
@@ -109,7 +87,7 @@ package a USB recovery device.
     # This produces one output file, which is used when building ARM
     # Trusted Firmware, next:
     #       u-boot.bin
-    cd ${TOP}/aspen-u-boot
+    cd ${TOP}/poplar-u-boot
     make distclean
     make CROSS_COMPILE=${CROSS_64} poplar_defconfig
     make CROSS_COMPILE=${CROSS_64} -j ${JOBCOUNT}
@@ -126,10 +104,10 @@ package a USB recovery device.
     # "l-loader", next:
     #       build/poplar/debug/bl1.bin
     #       build/poplar/debug/fip.bin
-    cd ${TOP}/aspen-arm-trusted-firmware
+    cd ${TOP}/poplar-arm-trusted-firmware
     make distclean
     make CROSS_COMPILE=${CROSS_64} all fip DEBUG=1 PLAT=poplar SPD=none \
-		       BL33=${TOP}/aspen-u-boot/u-boot.bin
+		       BL33=${TOP}/poplar-u-boot/u-boot.bin
 
 - Build "l-loader".  First you'll gather the two ARM Trusted Firmware
   components you built into the "atf" directory.  Note that "l-loader"
@@ -139,9 +117,9 @@ package a USB recovery device.
     # USB flash drive:
     #       l-loader.bin
     mkdir -p ${TOP}/out/l-loader
-    cd ${TOP}/aspen-l-loader
-    cp ${TOP}/aspen-arm-trusted-firmware/poplar/debug/bl1.bin atf/
-    cp ${TOP}/aspen-arm-trusted-firmware/poplar/debug/fip.bin atf/
+    cd ${TOP}/poplar-l-loader
+    cp ${TOP}/poplar-arm-trusted-firmware/poplar/debug/bl1.bin atf/
+    cp ${TOP}/poplar-arm-trusted-firmware/poplar/debug/fip.bin atf/
     make clean
     make CROSS_COMPILE=${CROSS_32}
 
@@ -153,7 +131,7 @@ package a USB recovery device.
     # the USB flash drive image:
     #       arch/arm64/boot/Image
     #       arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb
-    cd ${TOP}/aspen-linux
+    cd ${TOP}/poplar-linux
     make distclean
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" defconfig
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" -j ${JOBCOUNT}
@@ -162,10 +140,10 @@ package a USB recovery device.
   the Poplar USB drive recovery image.
 
     cd ${TOP}/recovery
-    cp ${TOP}/aspen-tools/poplar_recovery_builder.sh .
+    cp ${TOP}/poplar-tools/poplar_recovery_builder.sh .
     cp ${TOP}/l-loader/l-loader.bin .
-    cp ${TOP}/aspen-linux/arch/arm64/boot/Image .
-    cp ${TOP}/aspen-linux/arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb .
+    cp ${TOP}/poplar-linux/arch/arm64/boot/Image .
+    cp ${TOP}/poplar-linux/arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb .
 
 - Build an image to save to a USB flash drive for Poplar recovery.
   You need to supply the root file system image you downloaded
