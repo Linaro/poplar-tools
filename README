@@ -11,24 +11,24 @@ including WiFi, Bluetooth, and IR.
 The following git repositories contain source code to use for
 development with the Poplar board:
 
-https://github.com/alexelder/poplar-tools.git
+https://github.com/linaro/poplar-tools.git
 	This repository contains tools related to building software
 	for Poplar.  It also includes general development-related
 	documentation on the Poplar source code.
 
-https://github.com/alexelder/poplar-linux.git
+https://github.com/linaro/poplar-linux.git
    	The Linux kernel, with additional support for Poplar that is
 	not yet upstream.
 	
-https://github.com/alexelder/poplar-u-boot.git
+https://github.com/linaro/poplar-u-boot.git
 	The U-Boot boot loader with support for Poplar that is not
 	yet upstream.
 
-https://github.com/alexelder/poplar-arm-trusted-firmware.git
+https://github.com/linaro/poplar-arm-trusted-firmware.git
 	ARM Trusted Firmware, with support for Poplar that is not
 	yet upstream.
 
-https://github.com/alexelder/poplar-l-loader.git
+https://github.com/linaro/poplar-l-loader.git
 	An initial stage boot loader used by Poplar.  Its primary
 	purpose is to switch the CPU from operating in 32-bit mode
 	to 64-bit mode before launching ARM Trusted Firmware.
