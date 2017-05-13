@@ -33,7 +33,7 @@ IMAGE=disk_image	# disk image file
 MOUNT=binary		# mount point for disk image; also output directory
 
 # This is the ultimate output file
-USB_SIZE=15000000	# About 7.5 GB in sectors
+USB_SIZE=4000000	# A little under 2 GB in sectors
 USB_IMG=usb_recovery.img
 
 # content that gets transferred to USB stick
@@ -301,6 +301,7 @@ function partition_validate() {
 		echo Warning: unused sectors on disk.
 		echo -n "  Recommend increasing partition ${PART_COUNT} size "
 		echo "to $(expr ${EMMC_SIZE} - ${PART_OFFSET[${PART_COUNT}]})"
+		echo
 	fi
 }
 
@@ -479,10 +480,12 @@ function populate_root() {
 # Output the kernel command line arguments.
 function kernel_args() {
 	echo -n " loglevel=4"
+	echo -n " mem=1G"
 	echo -n " root=${EMMC_DEV}p${ROOT_PART}"
 	echo -n " rootfstype=${PART_FSTYPE[${ROOT_PART}]}"
-	echo -n " rw"
 	echo -n " rootwait"
+	echo -n " rw"
+	echo -n " earlycon"
 	echo
 }
 
@@ -537,7 +540,7 @@ function populate_boot() {
 # single FAT32 partition.
 function image_init() {
 	local mkfs_command=$(fstype_mkfs vfat)
-	local offset
+	local offset=8	# start the partition at offset 4 KB
 
 	# First partition the disk
 	truncate -s $(expr ${USB_SIZE} \* ${SECTOR_BYTES}) ${USB_IMG} ||
@@ -549,14 +552,14 @@ function image_init() {
 	{								\
 		echo mklabel msdos;					\
 		echo unit s;						\
-		echo mkpart primary fat32 1 -1;		\
-		echo "set 1 boot on";					\
+		echo mkpart primary fat32 ${offset} -1;				\
 	} | sudo parted ${LOOP} || nope "failed to partition USB image"
 	loop_detach
 
 	# Set up loop device on our sole partition, create a FAT32
 	# file system, and mount it
-	loop_attach 1 $(expr ${USB_SIZE} - 1) ${USB_IMG}
+	loop_attach ${offset} $(expr ${USB_SIZE} - ${offset}) ${USB_IMG}
+
 	sudo ${mkfs_command} ${LOOP} || nope "unable to mkfs USB partition"
 	partition_mount
 }
@@ -607,8 +610,6 @@ function installer_add_file() {
 
 function installer_finish() {
 	sudo cat <<-! | suser_append ${MOUNT}/${INSTALL_SCRIPT}
-	
-
 		echo ============== INSTALLATION IS DONE ===============
 		echo (Please remove the USB stick and reset your board)
 	!
@@ -685,8 +686,8 @@ partition_init
 partition_define 8191    none		# loader
 partition_define 262144  vfat /boot
 partition_define 3923967 ext4 /
-partition_define 5537791 ext4 /a
-partition_define -1      ext4 /b
+# partition_define 5537791 ext4 /a
+# partition_define -1      ext4 /b
 partition_validate
 
 partition_show
@@ -739,7 +740,5 @@ installer_finish
 image_finish
 
 echo ====== Poplar recovery image builder done! ======
-
-cleanup
 
 exit 0
