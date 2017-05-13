@@ -4,31 +4,31 @@ This git repository contains code and documentation related to the
 HiSilicon Poplar board.  The Poplar board uses a HiSilicon Hi3798cv200
 quad core ARM Cortex A53 processor, supporting NEON and multi-core
 Mali T720 GPU, and able to decode 4K UHD data streams at 60 fps.
-The Poplar board has 1GB of RAM; about 8GB or eMMC; an Ethernet
+The Poplar board has:  1GB of RAM; about 8GB of eMMC; an Ethernet
 port; an HDMI 2.0a port supporting HDCP 2.2; and other support
 including WiFi, Bluetooth, and IR.
 
 The following git repositories contain source code to use for
 development with the Poplar board:
 
-git@github.com:linaro/poplar-tools.git
+https://github.com/alexelder/poplar-tools.git
 	This repository contains tools related to building software
 	for Poplar.  It also includes general development-related
 	documentation on the Poplar source code.
 
-git@github.com:linaro/poplar-linux.git
+https://github.com/alexelder/poplar-linux.git
    	The Linux kernel, with additional support for Poplar that is
 	not yet upstream.
 	
-git@github.com:linaro/poplar-u-boot.git
+https://github.com/alexelder/poplar-u-boot.git
 	The U-Boot boot loader with support for Poplar that is not
 	yet upstream.
 
-git@github.com:linaro/poplar-arm-trusted-firmware.git
+https://github.com/alexelder/poplar-arm-trusted-firmware.git
 	ARM Trusted Firmware, with support for Poplar that is not
 	yet upstream.
 
-git@github.com:linaro/poplar-l-loader.git
+https://github.com/alexelder/poplar-l-loader.git
 	An initial stage boot loader used by Poplar.  Its primary
 	purpose is to switch the CPU from operating in 32-bit mode
 	to 64-bit mode before launching ARM Trusted Firmware.
