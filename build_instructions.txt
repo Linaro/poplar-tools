@@ -1,3 +1,4 @@
+-------------------------------------------------
 Building Poplar System Recovery Media From Source
 -------------------------------------------------
 The instructions that follow describe the process for creating a USB
@@ -188,7 +189,7 @@ package a USB recovery device.
 
 - You will need superuser access.  And you'll need to answer "yes".
 
-    read -i no -p "Overwrite ${USBDISK} (please type \"yes\")? " x
+    read -i no -p "REALLY OVERWRITE ${USBDISK} (please type \"yes\")? " x
     [ ${x} = yes ] && sudo dd if=usb_recovery.img of=${USBDISK}
 
 - Eject the USB flash drive,
@@ -213,57 +214,42 @@ package a USB recovery device.
   are USB 2.0 ports, they're stacked on top of each other.  Insert
   the USB memory stick into one of these two.
 
-- There is a "USB_BOOT" button on the board.  It is one of two
-  buttons on same side of the boards as the stacked USB2.0 ports.
-  To boot from the memory stick, this button needs to be depressed
-  at power-on.  You only need to hold it for about a second; keeping
-  it down a bit longer does no harm.
+- Next you will be powering on the board, but you need to interrupt
+  the automated boot process.  To do this, be prepared to enter
+  control-C, perhaps repeatedly, in the serial console window until
+  you find the boot process has stopped.
 
-- Hold the USB_BOOT button down, and power on the Poplar board.
-  Release the USB_BOOT button after a second or two.  The board
-  should boot, and the serial console should display boot messages.
-  Since you have started with the USB_BOOT pressed, you'll be
-  prompted with a message lke this:
+- Power on the Poplar board, and interrupt its automated boot with
+  control-C.
 
-    ==== POPLAR USB RECOVERY ====
-
-    Are you sure you want to re-initialize your Poplar board?
-    Please enter "yes" to proceed: 
-
-- At this point, if you don't say "yes" *exactly* the recovery will
-  be aborted and the board will proceed (finish its boot, and
-  possibly auto-boot whatever is already loaded).
-
-- If you say "yes" to initializing your board, the installation
-  process will proceed.  You'll see some messages showing progress,
-  like:
-
-         RECOVERY STARTING
-
-    starting USB...
-    USB0:   USB EHCI 1.00
-    scanning bus 0 for devices... 3 USB Device(s) found
-           scanning usb for storage devices... 1 Storage Device(s) found
-           scanning usb for ethernet devices... 0 Ethernet Device(s) found
-    reading install.scr
-    2321 bytes read in 21 ms (107.4 KiB/s)
-    ## Executing script at 32000000
-    reading mbr.gz
-    174 bytes read in 15 ms (10.7 KiB/s)
-    Uncompressed size: 512 = 0x200
-
-    MMC write: dev # 0, block # 0, count 1 ... 1 blocks written: OK
-
-    reading ebr5.bin.gz
-    69 bytes read in 16 ms (3.9 KiB/s)
-    Uncompressed size: 512 = 0x200
-    . . .
-
+- Now enter the following commands in the Poplar serial console
   It will take about 10 minutes to complete writing out the contents
   of the disk.  When this is done, the board will automatically
-  reset.
+  reset.  The result should look a bit like this:
 
-- Remove your USB memory stick from the Poplar board.
+    ---------------------------
+    | ## Executing script at 07000000
+    | reading mbr.gz
+    | 174 bytes read in 15 ms (10.7 KiB/s)
+    | Uncompressed size: 512 = 0x200
+    |
+    | MMC write: dev # 0, block # 0, count 1 ... 1 blocks written: OK
+    |
+    | reading ebr5.bin.gz
+    | 68 bytes read in 15 ms (3.9 KiB/s)
+    | Uncompressed size: 512 = 0x200
+    |
+    | MMC write: dev # 0, block # 4194303, count 1 ... 1 blocks written: OK
+    |          . . .
+
+- When this process completes, remove your USB memory stick from the
+  Poplar board and reset it.  You can reset it in one of three ways:
+  press the reset button; power the board off and on again; or run
+  this command in the serial console window:
+
+    reset
+
+  At this point, Linux should automatically boot from the eMMC.
 
 You have now booted your Poplar board with open source code that you
 have built yourself.
