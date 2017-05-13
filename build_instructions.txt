@@ -13,6 +13,7 @@ package a USB recovery device.
 - Make sure you have needed tools installed.  This list may well
   grow, but at least you'll need the following:
 
+      sudo apt-get update
       sudo apt-get install device-tree-compiler
 
 - Set up the working directory.
@@ -32,30 +33,30 @@ package a USB recovery device.
 
     mkdir ${TOP}/recovery
     wget -P ${TOP}/recovery \
-        http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/linaro-stretch-developer-20170504-58.tar.gz
+        http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/linaro-stretch-developer-20170511-60.tar.gz
 
 - Get the source code:
 
   cd ${TOP}
   git clone https://github.com/linaro/poplar-tools.git
-  git clone https://github.com/linaro/poplar-linux.git
-  git clone https://github.com/linaro/poplar-u-boot.git
-  git clone https://github.com/linaro/poplar-arm-trusted-firmware.git
   git clone https://github.com/linaro/poplar-l-loader.git
+  git clone https://github.com/linaro/poplar-arm-trusted-firmware.git
+  git clone https://github.com/linaro/poplar-u-boot.git
+  git clone https://github.com/linaro/poplar-linux.git
 
 - Set up branches to use, and make sure everything is clean:
 
     cd ${TOP}/poplar-linux
-    git checkout -b poplar-test origin/poplar-test
+    git checkout -b latest origin/latest
 
     cd ${TOP}/poplar-u-boot
-    git checkout -b poplar-test origin/poplar-test
+    git checkout -b latest origin/latest
 
     cd ${TOP}/poplar-arm-trusted-firmware
-    git checkout -b poplar-test origin/poplar-test
+    git checkout -b latest origin/latest
 
     cd ${TOP}/poplar-l-loader
-    git checkout -b poplar-test origin/poplar-test
+    git checkout -b latest origin/latest
 
 - Prepare for building.  Almost everything is aarch64, but one item
   (l-loader.bin) must be built for 32-bit ARM.  Set up environment
@@ -117,10 +118,9 @@ package a USB recovery device.
     # This produces one output file, which is used in building the
     # USB flash drive:
     #       l-loader.bin
-    mkdir -p ${TOP}/out/l-loader
     cd ${TOP}/poplar-l-loader
-    cp ${TOP}/poplar-arm-trusted-firmware/poplar/debug/bl1.bin atf/
-    cp ${TOP}/poplar-arm-trusted-firmware/poplar/debug/fip.bin atf/
+    cp ${TOP}/poplar-arm-trusted-firmware/build/poplar/debug/bl1.bin atf/
+    cp ${TOP}/poplar-arm-trusted-firmware/build/poplar/debug/fip.bin atf/
     make clean
     make CROSS_COMPILE=${CROSS_32}
 
