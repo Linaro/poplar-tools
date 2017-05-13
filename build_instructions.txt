@@ -14,7 +14,7 @@ package a USB recovery device.
   grow, but at least you'll need the following:
 
       sudo apt-get update
-      sudo apt-get install device-tree-compiler
+      sudo apt-get install device-tree-compiler libssl-dev
 
 - Set up the working directory.
 
@@ -187,10 +187,10 @@ package a USB recovery device.
 
 3)  Overwrite the USB drive you have inserted with the built image.
 
-- You will need superuser access.  And you'll need to answer "yes".
+- You will need superuser access.  This is where you write your disk
+  image to the USB flash drive.
 
-    read -i no -p "REALLY OVERWRITE ${USBDISK} (please type \"yes\")? " x
-    [ ${x} = yes ] && sudo dd if=usb_recovery.img of=${USBDISK}
+    sudo dd if=usb_recovery.img of=${USBDISK}
 
 - Eject the USB flash drive,
 
@@ -223,6 +223,11 @@ package a USB recovery device.
   control-C.
 
 - Now enter the following commands in the Poplar serial console
+
+    fatsize usb 0:1 install.scr
+    fatload usb 0:1 0x07000000 install.scr
+    source 0x07000000
+
   It will take about 10 minutes to complete writing out the contents
   of the disk.  When this is done, the board will automatically
   reset.  The result should look a bit like this:
