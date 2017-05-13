@@ -194,7 +194,7 @@ package a USB recovery device.
 
 - Eject the USB flash drive,
 
-    eject ${USBDISK}
+    sudo eject ${USBDISK}
 
 - Remove the USB flash drive from your host system
 
@@ -224,11 +224,12 @@ package a USB recovery device.
 
 - Now enter the following commands in the Poplar serial console
 
+    usb reset
     fatsize usb 0:1 install.scr
     fatload usb 0:1 0x07000000 install.scr
     source 0x07000000
 
-  It will take about 10 minutes to complete writing out the contents
+  It will take about 5-10 minutes to complete writing out the contents
   of the disk.  When this is done, the board will automatically
   reset.  The result should look a bit like this:
 
