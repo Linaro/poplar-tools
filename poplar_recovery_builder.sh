@@ -481,8 +481,8 @@ function populate_root() {
 function kernel_args() {
 	echo -n " loglevel=4"
 	echo -n " mem=1G"
-	echo -n " root=${EMMC_DEV}p${ROOT_PART}"
-	echo -n " rootfstype=${PART_FSTYPE[${ROOT_PART}]}"
+	echo -n " root=${EMMC_DEV}p${PART_ROOT}"
+	echo -n " rootfstype=${PART_FSTYPE[${PART_ROOT}]}"
 	echo -n " rootwait"
 	echo -n " rw"
 	echo -n " earlycon"
