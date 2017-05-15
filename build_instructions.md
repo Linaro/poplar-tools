@@ -175,9 +175,10 @@ This is done in order to create the Poplar USB drive recovery image.
     cp ${TOP}/poplar-linux/arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb .
 ```
 
-- Build an image to save to a USB flash drive for Poplar recovery.
-  You need to supply the root file system image you downloaded
-  earlier (whose name will be different from what's shown below).
+### Step 6: Build an image to save to a USB flash drive for Poplar recovery.
+  
+You need to supply the root file system image you downloaded
+earlier (whose name will be different from what's shown below).
 
 ```shell
     # This produces one output file, which is written to a USB flash drive:
