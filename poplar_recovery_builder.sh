@@ -443,6 +443,8 @@ function populate_loader() {
 	local offset=${PART_OFFSET[1]}
 	local size=${PART_SIZE[1]}
 
+	echo "- loader"
+
 	loop_attach ${offset} ${size} ${IMAGE}
 
 	# Just copy in the loader file we already created
@@ -513,8 +515,7 @@ function populate_boot() {
 	partition_mount
 
 	# Save a copy of our loader partition into a file in /boot
-	cat ${LOADER} |
-	suser_dd of=${MOUNT}/${LOADER} bs=${SECTOR_BYTES} count=${size}
+	cat ${LOADER} | suser_dd of=${MOUNT}/${LOADER}
 
 	# Now copy in the kernel image, DTB, and extlinux directories
 	sudo cp ${KERNEL_IMAGE} ${MOUNT} ||
@@ -529,8 +530,7 @@ function populate_boot() {
 	# Set up the extlinux.conf file
 	sudo mkdir -p ${MOUNT}/extlinux ||
 	nope "failed to save extlinux directory to boot partition"
-	bootscript_create |
-	suser_dd of=${MOUNT}/extlinux/extlinux.conf
+	bootscript_create | suser_dd of=${MOUNT}/extlinux/extlinux.conf
 
 	partition_unmount
 	loop_detach
@@ -552,7 +552,7 @@ function image_init() {
 	{								\
 		echo mklabel msdos;					\
 		echo unit s;						\
-		echo mkpart primary fat32 ${offset} -1;				\
+		echo mkpart primary fat32 ${offset} -1;			\
 	} | sudo parted ${LOOP} || nope "failed to partition USB image"
 	loop_detach
 
