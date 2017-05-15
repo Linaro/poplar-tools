@@ -270,9 +270,8 @@ Unmount anything on that USB flash drive that might have been automatically moun
 
 ```shell
     usb reset
-    fatsize usb 0:1 install.scr
-    fatload usb 0:1 0x07000000 install.scr
-    source 0x07000000
+    fatload usb 0:1 ${scriptaddr} install.scr
+    source ${scriptaddr}
 ```
 
   It will take about 5-10 minutes to complete writing out the contents
@@ -281,18 +280,18 @@ Unmount anything on that USB flash drive that might have been automatically moun
 
 ```shell
     ---------------------------
-    | ## Executing script at 07000000
+    | ## Executing script at 32000000
     | reading mbr.gz
-    | 174 bytes read in 15 ms (10.7 KiB/s)
+    | 159 bytes read in 15 ms (9.8 KiB/s)
     | Uncompressed size: 512 = 0x200
     |
     | MMC write: dev # 0, block # 0, count 1 ... 1 blocks written: OK
     |
-    | reading ebr5.bin.gz
-    | 68 bytes read in 15 ms (3.9 KiB/s)
-    | Uncompressed size: 512 = 0x200
+    | reading partition1.1-of-1.gz
+    | 223851 bytes read in 32 ms (6.7 KiB/s)
+    | Uncompressed size: 4193792 = 0x3FFE00
     |
-    | MMC write: dev # 0, block # 4194303, count 1 ... 1 blocks written: OK
+    | MMC write: dev # 0, block # 1, count 8191 ... 8191 blocks written: OK
     |          . . .
 ```
 
