@@ -595,14 +595,14 @@ function installer_add_file() {
 	local offset=$(printf "0x%08x" $2)
 	local filepath=${MOUNT}/${filename};
 	local bytes=$(file_bytes ${filepath});
+	local hex_bytes=$(printf "0x%08x" ${bytes})
 	local size=$(howmany ${bytes} ${SECTOR_BYTES})
 	local hex_size=$(printf "0x%08x" ${size})
 
 	sudo gzip ${filepath}
 
-	installer_update "fatsize usb 0:1 ${filename}.gz"
 	installer_update "fatload usb 0:1 ${IN_ADDR} ${filename}.gz"
-	installer_update "unzip ${IN_ADDR} ${OUT_ADDR}"
+	installer_update "unzip ${IN_ADDR} ${OUT_ADDR} ${hex_bytes}"
 	installer_update "mmc write ${OUT_ADDR} ${offset} ${hex_size}"
 	installer_update "echo"
 	installer_update ""
