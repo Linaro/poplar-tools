@@ -201,17 +201,16 @@ THIS IS VERY IMPORTANT. This will COMPLETELY ERASE the contents of whatever
 	grep . /sys/class/block/sd?/device/model
 ```
 
-      If you recognize the model name as your USB flash device, then
-      you know which "sd" device to use.  Here's an example:
+ If you recognize the model name as your USB flash device, then
+ you know which "sd" device to use.  Here's an example:
 
 ```shell
 	/sys/class/block/sdc/device/model:Patriot Memory
 	                     ^^^
 ```
 
-      I had a Patriot Memory USB flash drive, and the device name
-      I'll want is "/dev/sdc" (based on "sdc" above).  Record this
-      name:
+I had a Patriot Memory USB flash drive, and the device name
+I'll want is "/dev/sdc" (based on "sdc" above).  Record this name:
 
 ```shell
 	USBDISK=/dev/sdc	# Make sure this is *your* device
@@ -227,20 +226,19 @@ Unmount anything on that USB flash drive that might have been automatically moun
 
 ### Step 3: Overwrite the USB drive you have inserted with the built image.
 
-- You will need superuser access.  This is where you write your disk
-  image to the USB flash drive.
+#### You will need superuser access. This is where you write your disk image to the USB flash drive.
 
 ```shell
     sudo dd if=usb_recovery.img of=${USBDISK}
 ```
 
-- Eject the USB flash drive,
+#### Eject the USB flash drive,
 
 ```shell
     sudo eject ${USBDISK}
 ```
 
-- Remove the USB flash drive from your host system
+#### Remove the USB flash drive from your host system
 
 ## Run the recovery on the Poplar board
 
