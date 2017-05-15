@@ -1,11 +1,10 @@
--------------------------------------------------
-Building Poplar System Recovery Media From Source
--------------------------------------------------
+# Building Poplar System Recovery Media From Source
+
 The instructions that follow describe the process for creating a USB
 flash drive suitable for use in recovering a Poplar system from a
 "bricked" state.  The USB memory stick must be at least 8GB.
 
-1)  Gather required sources
+## 1)  Gather required sources
 
 First you'll gather the source code and other materials required to
 package a USB recovery device.
@@ -13,14 +12,18 @@ package a USB recovery device.
 - Make sure you have needed tools installed.  This list may well
   grow, but at least you'll need the following:
 
+```shell
       sudo apt-get update
       sudo apt-get install device-tree-compiler libssl-dev
+```
 
 - Set up the working directory.
 
+```shell
   mkdir -p ~/src/poplar
   cd ~/src/poplar
   TOP=$(pwd)
+```
 
 - Download a root file system image to use.  These are available from
   Linaro.  An example is "linaro-stretch-developer-20170511-60.tar.gz",
@@ -31,21 +34,26 @@ package a USB recovery device.
   other than "wget" shown below, please ensure it gets place in the
   "recovery" directory created here.
 
+```shell
     mkdir ${TOP}/recovery
     wget -P ${TOP}/recovery \
         http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/linaro-stretch-developer-20170511-60.tar.gz
+```
 
 - Get the source code:
 
+```shell
   cd ${TOP}
   git clone https://github.com/linaro/poplar-tools.git
   git clone https://github.com/linaro/poplar-l-loader.git
   git clone https://github.com/linaro/poplar-arm-trusted-firmware.git
   git clone https://github.com/linaro/poplar-u-boot.git
   git clone https://github.com/linaro/poplar-linux.git
+```
 
 - Set up branches to use, and make sure everything is clean:
 
+```shell
     cd ${TOP}/poplar-linux
     git checkout -b latest origin/latest
 
@@ -57,14 +65,17 @@ package a USB recovery device.
 
     cd ${TOP}/poplar-l-loader
     git checkout -b latest origin/latest
+```
 
 - Prepare for building.  Almost everything is aarch64, but one item
   (l-loader.bin) must be built for 32-bit ARM.  Set up environment
   variables to represent the two cross-compiler toolchains you'll
   be using.
 
+```shell
     CROSS_32=arm-linux-gnueabi-
     CROSS_64=aarch64-linux-gnu-
+```
 
   If you don't already have ARM 32- and 64-bit toochains installed,
   they are available from Linaro.
@@ -78,14 +89,17 @@ package a USB recovery device.
   "make" with multiple concurrent jobs.  The command below sets
   JOBCOUNT to something reasonable to benefit from this.
 
+```shell
     JOBCOUNT=$(grep ^processor /proc/cpuinfo | wc -w)
+```
 
-2)  Build everything
+## 2)  Build everything
 
 - Build U-Boot.  The result of this process will be a file
   "u-boot.bin" that will be incorporated into a "FIP" file created
   for ARM Trusted Firmware code.
 
+```
     # This produces one output file, which is used when building ARM
     # Trusted Firmware, next:
     #       u-boot.bin
@@ -93,6 +107,7 @@ package a USB recovery device.
     make distclean
     make CROSS_COMPILE=${CROSS_64} poplar_defconfig
     make CROSS_COMPILE=${CROSS_64} -j ${JOBCOUNT}
+```
 
 - Build ARM Trusted Firmware components.  This will create "bl1.bin"
   and "fip.bin", both of which will be incorporated into the image
@@ -102,6 +117,7 @@ package a USB recovery device.
   "build"; you'll create a symlink to that in our output directory,
   to keep things together.
 
+```shell
     # This produces two output files, which are used when building
     # "l-loader", next:
     #       build/poplar/debug/bl1.bin
@@ -110,11 +126,13 @@ package a USB recovery device.
     make distclean
     make CROSS_COMPILE=${CROSS_64} all fip DEBUG=1 PLAT=poplar SPD=none \
 		       BL33=${TOP}/poplar-u-boot/u-boot.bin
+```
 
 - Build "l-loader".  First you'll gather the two ARM Trusted Firmware
   components you built into the "atf" directory.  Note that "l-loader"
   is a 32-bit executable, so you need to use a different tool chain.
 
+```shell
     # This produces one output file, which is used in building the
     # USB flash drive:
     #       l-loader.bin
@@ -123,11 +141,13 @@ package a USB recovery device.
     cp ${TOP}/poplar-arm-trusted-firmware/build/poplar/debug/fip.bin atf/
     make clean
     make CROSS_COMPILE=${CROSS_32}
+```
 
 - Build Linux.  The result of this process will be two files: "Image"
   contains the kernel image; and "hi3798cv200-poplar.dtb" containing
   the flattened device tree file (device tree binary).
 
+```shell
     # This produces two output files, which are used when building
     # the USB flash drive image:
     #       arch/arm64/boot/Image
@@ -136,26 +156,31 @@ package a USB recovery device.
     make distclean
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" defconfig
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" -j ${JOBCOUNT}
+```
 
 - Gather the required components you built above in order to create
   the Poplar USB drive recovery image.
 
+```shell
     cd ${TOP}/recovery
     cp ${TOP}/poplar-tools/poplar_recovery_builder.sh .
     cp ${TOP}/poplar-l-loader/l-loader.bin .
     cp ${TOP}/poplar-linux/arch/arm64/boot/Image .
     cp ${TOP}/poplar-linux/arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb .
+```
 
 - Build an image to save to a USB flash drive for Poplar recovery.
   You need to supply the root file system image you downloaded
   earlier (whose name will be different from what's shown below).
 
+```shell
     # This produces one output file, which is written to a USB flash drive:
     #       usb_recovery.img
     bash ./poplar_recovery_builder.sh \
 		    linaro-stretch-developer-20170511-60.tar.gz
+```
 
-3)  Prepare to replace the contents of a USB flash drive with the
+## 3)  Prepare to replace the contents of a USB flash drive with the
     output of the build.
 
 - First you need to identify your USB flash drive.  THIS IS VERY
@@ -166,39 +191,51 @@ package a USB recovery device.
 
     - Identify your USB device:
 
+```shell
 	grep . /sys/class/block/sd?/device/model
+```
 
       If you recognize the model name as your USB flash device, then
       you know which "sd" device to use.  Here's an example:
 
+```shell
 	/sys/class/block/sdc/device/model:Patriot Memory
 	                     ^^^
+```
+
       I had a Patriot Memory USB flash drive, and the device name
       I'll want is "/dev/sdc" (based on "sdc" above).  Record this
       name:
 
+```shell
 	USBDISK=/dev/sdc	# Make sure this is *your* device
+```
 
 - Unmount anything on that USB flash drive that might have been
   automatically mounted when you inserted it.
 
+```shell
     mount | grep ${USBDISK} | awk '{print $1}' | xargs sudo umount
+```
 
-
-3)  Overwrite the USB drive you have inserted with the built image.
+## 4)  Overwrite the USB drive you have inserted with the built image.
 
 - You will need superuser access.  This is where you write your disk
   image to the USB flash drive.
 
+```shell
     sudo dd if=usb_recovery.img of=${USBDISK}
+```
 
 - Eject the USB flash drive,
 
+```shell
     sudo eject ${USBDISK}
+```
 
 - Remove the USB flash drive from your host system
 
-4)  Run the recovery on the Poplar board
+## 4)  Run the recovery on the Poplar board
 
 - Next you'll put the USB flash drive on the Poplar board to boot
   from it.  The Poplar board should be powered off.  You should have
@@ -207,8 +244,10 @@ package a USB recovery device.
   For me, the board console shows up as /dev/ttyUSB0 when the USB
   cable is connected.  The serial port runs at 115200 baud.  I use
   this command to see what's on the console:
-
+  
+```shell
       screen /dev/ttyUSB0 115200
+```
 
 - There are a total of 4 USB connectors on the Poplar board.  Two
   are USB 2.0 ports, they're stacked on top of each other.  Insert
@@ -224,15 +263,18 @@ package a USB recovery device.
 
 - Now enter the following commands in the Poplar serial console
 
+```shell
     usb reset
     fatsize usb 0:1 install.scr
     fatload usb 0:1 0x07000000 install.scr
     source 0x07000000
+```
 
   It will take about 5-10 minutes to complete writing out the contents
   of the disk.  When this is done, the board will automatically
   reset.  The result should look a bit like this:
 
+```shell
     ---------------------------
     | ## Executing script at 07000000
     | reading mbr.gz
@@ -247,13 +289,16 @@ package a USB recovery device.
     |
     | MMC write: dev # 0, block # 4194303, count 1 ... 1 blocks written: OK
     |          . . .
+```
 
 - When this process completes, remove your USB memory stick from the
   Poplar board and reset it.  You can reset it in one of three ways:
   press the reset button; power the board off and on again; or run
   this command in the serial console window:
 
+```shell
     reset
+```
 
   At this point, Linux should automatically boot from the eMMC.
 
