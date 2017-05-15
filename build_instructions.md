@@ -9,7 +9,7 @@ flash drive suitable for use in recovering a Poplar system from a
 First you'll gather the source code and other materials required to
 package a USB recovery device.
 
-### 1 - Make sure you have needed tools installed.  This list may well
+### Step 1: Make sure you have needed tools installed.  This list may well
   grow, but at least you'll need the following:
 
 ```shell
@@ -17,7 +17,7 @@ package a USB recovery device.
       sudo apt-get install device-tree-compiler libssl-dev
 ```
 
-### 2 - Set up the working directory.
+### Step 2: Set up the working directory.
 
 ```shell
   mkdir -p ~/src/poplar
@@ -25,7 +25,7 @@ package a USB recovery device.
   TOP=$(pwd)
 ```
 
-### 3 - Download a root file system image to use.  These are available from
+### Step 3: Download a root file system image to use.  These are available from
   Linaro.  An example is "linaro-stretch-developer-20170511-60.tar.gz",
   which is (or was) available here:
     http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/
@@ -40,7 +40,7 @@ package a USB recovery device.
         http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/linaro-stretch-developer-20170511-60.tar.gz
 ```
 
-### 4 - Get the source code:
+### Step 4: Get the source code:
 
 ```shell
   cd ${TOP}
@@ -51,7 +51,7 @@ package a USB recovery device.
   git clone https://github.com/linaro/poplar-linux.git
 ```
 
-### 5 - Set up branches to use, and make sure everything is clean:
+### Step 5: Set up branches to use, and make sure everything is clean:
 
 ```shell
     cd ${TOP}/poplar-linux
@@ -67,7 +67,7 @@ package a USB recovery device.
     git checkout -b latest origin/latest
 ```
 
-### 6 - Prepare for building.  Almost everything is aarch64, but one item
+### Step 6: Prepare for building.  Almost everything is aarch64, but one item
   (l-loader.bin) must be built for 32-bit ARM.  Set up environment
   variables to represent the two cross-compiler toolchains you'll
   be using.
@@ -95,7 +95,7 @@ package a USB recovery device.
 
 ## Build everything
 
-### 1 - Build U-Boot.  The result of this process will be a file
+### Step 1: Build U-Boot.  The result of this process will be a file
   "u-boot.bin" that will be incorporated into a "FIP" file created
   for ARM Trusted Firmware code.
 
@@ -109,7 +109,7 @@ package a USB recovery device.
     make CROSS_COMPILE=${CROSS_64} -j ${JOBCOUNT}
 ```
 
-### 2 - Build ARM Trusted Firmware components.  
+### Step 2: Build ARM Trusted Firmware components.  
 
 This will create "bl1.bin" and "fip.bin", both of which will be incorporated into the image 
 created for "l-loader". The FIP file packages files "bl2.bin" and
@@ -129,7 +129,7 @@ to keep things together.
 		       BL33=${TOP}/poplar-u-boot/u-boot.bin
 ```
 
-### 3 - Build "l-loader"
+### Step 3: Build "l-loader"
 
 First you'll gather the two ARM Trusted Firmware
 components you built into the "atf" directory.  Note that "l-loader"
@@ -146,7 +146,7 @@ is a 32-bit executable, so you need to use a different tool chain.
     make CROSS_COMPILE=${CROSS_32}
 ```
 
-### 4 -  Build Linux.  
+### Step 4: Build Linux.  
 
 The result of this process will be two files: "Image"
 contains the kernel image; and "hi3798cv200-poplar.dtb" containing
@@ -163,7 +163,7 @@ the flattened device tree file (device tree binary).
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" -j ${JOBCOUNT}
 ```
 
-### 5 - Gather the required components you built above
+### Step 5: Gather the required components you built above
 
 This is done in order to create the Poplar USB drive recovery image.
 
@@ -188,7 +188,7 @@ This is done in order to create the Poplar USB drive recovery image.
 
 ## Prepare to replace the contents of a USB flash drive with the output of the build.
 
-### 1 - First you need to identify your USB flash drive.  
+### Step 1: First you need to identify your USB flash drive.  
 
 THIS IS VERY IMPORTANT. This will COMPLETELY ERASE the contents of whatever
   device you specify here.  So be sure you get it right.**
@@ -216,14 +216,15 @@ THIS IS VERY IMPORTANT. This will COMPLETELY ERASE the contents of whatever
 	USBDISK=/dev/sdc	# Make sure this is *your* device
 ```
 
-### 2 - Unmount anything on that USB flash drive that might have been
-  automatically mounted when you inserted it.
+### Step 2: Unmount Flash Drive
+
+Unmount anything on that USB flash drive that might have been automatically mounted when you inserted it.
 
 ```shell
     mount | grep ${USBDISK} | awk '{print $1}' | xargs sudo umount
 ```
 
-### 3 - Overwrite the USB drive you have inserted with the built image.
+### Step 3: Overwrite the USB drive you have inserted with the built image.
 
 - You will need superuser access.  This is where you write your disk
   image to the USB flash drive.
