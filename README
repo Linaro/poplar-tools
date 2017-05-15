@@ -3,10 +3,15 @@ HiSilicon Poplar Tools
 This git repository contains code and documentation related to the
 HiSilicon Poplar board.  The Poplar board uses a HiSilicon Hi3798cv200
 quad core ARM Cortex A53 processor, supporting NEON and multi-core
-Mali T720 GPU, and able to decode 4K UHD data streams at 60 fps.
+Mali T720 GPU, and is able to decode 4K UHD data streams at 60 fps.
 The Poplar board has:  1GB of RAM; about 8GB of eMMC; an Ethernet
 port; an HDMI 2.0a port supporting HDCP 2.2; and other support
 including WiFi, Bluetooth, and IR.
+
+The file "build_instructions.md" here describes how to build the
+code listed above, and how to package the result into a form that
+can be used to perform an initial (or recovery) flash of the code
+onto the Poplar board's eMMC storage.
 
 The following git repositories contain source code to use for
 development with the Poplar board:
@@ -33,8 +38,30 @@ https://github.com/linaro/poplar-l-loader.git
 	purpose is to switch the CPU from operating in 32-bit mode
 	to 64-bit mode before launching ARM Trusted Firmware.
 
-The file "build_instructions.txt" here describes how to build the
-code listed above, and how to package the result into a form that
-can be used to perform an initial (or recovery) flash of the code
-onto the Poplar board's eMMC storage.
+What follows are some conventions used for branches in these
+repositories.  Note: these conventions are subject to change.
 
+  latest
+    This branch is considered the best version of this code to use.
+    Checking out the "latest" branch of all repositories, and then
+    building them and packaging the result, should be expected to
+    produce working software.
+
+  <version>-poplar
+    Our aim is to have all code supporting the Poplar board go
+    upstream (to various upstream respositories).  Branches that
+    support Poplar are created by applying not-yet-upstream patches
+    on top of well-defined upstream version branches.  At the
+    moment, this only applies to the Linux kernel (which has
+    branches like "v4.11.y-poplar" for stable 4.11-based branches
+    and "v4.12-rc-poplar" for support built upon the latest Linux
+    "-rc" release.
+
+The "poplar" branches will be updated fairly regularly (though their
+frequency is not guaranteed).  For example, the Linux branches will
+be updated weekly as upstream "-rc" releases get created.  THESE
+BRANCH UPDATES WILL BE THE RESULT OF REBASING, NOT MERGING.
+
+For now, there is no "master" branch on any tree except "l-loader".
+For "l-loader", this git repository *is* the upstream tree, and the
+"master" branch represents the latest, greatest version of the code.
