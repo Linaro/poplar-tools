@@ -553,6 +553,7 @@ function image_init() {
 		echo mklabel msdos;					\
 		echo unit s;						\
 		echo mkpart primary fat32 ${offset} -1;			\
+		echo quit;						\
 	} | sudo parted ${LOOP} || nope "failed to partition USB image"
 	loop_detach
 
