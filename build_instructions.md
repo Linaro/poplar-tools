@@ -14,7 +14,7 @@ package a USB recovery device.
 
 ```shell
       sudo apt-get update
-      sudo apt-get install device-tree-compiler libssl-dev
+      sudo apt-get install device-tree-compiler libssl-dev u-boot-tools
 ```
 
 ### Step 2: Set up the working directory.
@@ -157,10 +157,22 @@ the flattened device tree file (device tree binary).
     # the USB flash drive image:
     #       arch/arm64/boot/Image
     #       arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb
+    rm -rf ${TOP}/recovery/root
+    mkdir -p ${TOP}/recovery/root
     cd ${TOP}/poplar-linux
     make distclean
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" defconfig
-    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" -j ${JOBCOUNT}
+    mkdir -p ${TOP}/recovery/root/boot
+    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" \
+    			INSTALL_PATH=${TOP}/recovery/root/boot \
+    			INSTALL_MOD_PATH=${TOP}/recovery/root \
+    			INSTALL_DTBS_PATH=${TOP}/recovery/root/boot \
+			all install modules_install dtbs_install \
+			-j ${JOBCOUNT} > make.out 2>&1 &
+
+#    			INSTALL_FW_PATH=${TOP}/recovery/root/lib/firmware \
+#    			INSTALL_HDR_PATH=${TOP}/recovery/root/usr \
+#			firmware_install headers_install
 ```
 
 ### Step 5: Gather the required components you built above
