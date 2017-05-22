@@ -9,10 +9,11 @@ flash drive suitable for use in recovering a Poplar system from a
 ## Gather required sources
 
 First you'll gather the source code and other materials required to
-package a USB recovery device.
+package a USB recovery device. These instructions assume you are using Linux based OS on your host machine.
 
-### Step 1: Make sure you have needed tools installed.
-  This list may well grow, but at least you'll need the following:
+### Step 1: Make sure you have needed tools installed
+
+This list may well grow, but at least you'll need the following:
 
 ```shell
       sudo apt-get update
