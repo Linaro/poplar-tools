@@ -17,6 +17,7 @@ This list may well grow, but at least you'll need the following:
 
 ```shell
       sudo apt-get update
+      sudo apt-get upgrade
       sudo apt-get install device-tree-compiler libssl-dev u-boot-tools
 ```
 
