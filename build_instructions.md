@@ -270,13 +270,19 @@ Unmount anything on that USB flash drive that might have been automatically moun
   are USB 2.0 ports, they're stacked on top of each other.  Insert
   the USB memory stick into one of these two.
 
+- There is a "USB_BOOT" button on the board.  It is one of two
+  buttons on same side of the boards as the stacked USB2.0 ports.
+  To boot from the memory stick, this button needs to be depressed
+  at power-on.  You only need to hold it for about a second;
+  keeping it down a bit longer does no harm.
+
 - Next you will be powering on the board, but you need to interrupt
   the automated boot process.  To do this, be prepared to enter
   control-C, perhaps repeatedly, in the serial console window until
   you find the boot process has stopped.
 
-- Power on the Poplar board, and interrupt its automated boot with
-  control-C.
+- Power on the Poplar board (while pressing the USB_BOOT button),
+  and interrupt its automated boot with control-C.
 
 - Now enter the following commands in the Poplar serial console
 
