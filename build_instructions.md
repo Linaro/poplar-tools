@@ -228,15 +228,7 @@ I'll want is "/dev/sdc" (based on "sdc" above).  Record this name:
 	USBDISK=/dev/sdc	# Make sure this is *your* device
 ```
 
-### Step 2: Unmount Flash Drive
-
-Unmount anything on that USB flash drive that might have been automatically mounted when you inserted it.
-
-```shell
-    mount | grep ${USBDISK} | awk '{print $1}' | xargs sudo umount
-```
-
-### Step 3: Overwrite the USB drive you have inserted with the built image.
+### Step 2: Overwrite the USB drive you have inserted with the built image.
 
 #### You will need superuser access. This is where you write your disk image to the USB flash drive.
 
