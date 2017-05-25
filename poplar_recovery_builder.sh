@@ -75,7 +75,7 @@ function suser_append() {
 
 function cleanup() {
 	[ "${LOOP_MOUNTED}" ] && sudo umount ${LOOP}
-	rm -rf ${MOUNT}
+	sudo rm -rf ${MOUNT}
 	[ "${LOOP_ATTACHED}" ] && loop_detach
 	rm -f ${LOADER}
 	rm -f ${IMAGE}
