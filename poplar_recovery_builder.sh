@@ -31,6 +31,11 @@ KERNEL_IMAGE=Image
 DEVICE_TREE_BINARY=hi3798cv200-poplar.dtb
 # Initial ramdisk is optional; don't define it if it's not set
 # INIT_RAMDISK=initrd.img		# a cpio.gz file
+############
+ANDROID_BOOT_IMAGE=boot.img
+ANDROID_SYSTEM_IMAGE=system.img
+ANDROID_CACHE_IMAGE=cache.img
+ANDROID_USER_DATA_IMAGE=userdata.img
 
 # Temporary output files
 IMAGE=disk_image	# disk image file
@@ -44,6 +49,8 @@ USB_IMG=usb_recovery.img
 
 LOADER=loader.bin	# in /boot on target; omits 1st sector of l-loader.bin
 INSTALL_SCRIPT=install	# for U-boot to run on the target
+
+TEMPFILE=$(mktemp -p .)
 
 ###############
 
@@ -64,8 +71,11 @@ function parseargs() {
 	[ $# -ne 1 ] && usage "missing argument"
 	INPUT_FILES="L_LOADER USB_LOADER"
 	if [ "$1" = "android" ]; then
-		usage "Android image creation is not yet supported"
 		ANDROID_IMAGE=true
+		INPUT_FILES="${INPUT_FILES} ANDROID_BOOT_IMAGE"
+		INPUT_FILES="${INPUT_FILES} ANDROID_SYSTEM_IMAGE"
+		INPUT_FILES="${INPUT_FILES} ANDROID_CACHE_IMAGE"
+		INPUT_FILES="${INPUT_FILES} ANDROID_USER_DATA_IMAGE"
 	else
 		ROOT_FS_ARCHIVE=$1
 		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
@@ -107,6 +117,7 @@ function cleanup() {
 	[ "${LOOP_ATTACHED}" ] && loop_detach
 	rm -f ${LOADER}
 	rm -f ${IMAGE}
+	rm -f ${TEMPFILE}
 }
 
 function nope() {
@@ -211,9 +222,13 @@ function map_description() {
 	local description=$2
 
 	case ${description} in
-	/)	PART_ROOT=${part_number} ;;
-	/boot)	PART_BOOT=${part_number} ;;
-	*)	;;	# We don't care about any others
+	/)			PART_ROOT=${part_number} ;;
+	/boot)			PART_BOOT=${part_number} ;;
+	android_boot)		PART_ANDROID_BOOT=${part_number} ;;
+	android_system)		PART_ANDROID_SYSTEM=${part_number} ;;
+	android_cache)		PART_ANDROID_CACHE=${part_number} ;;
+	android_user_data)	PART_ANDROID_USER_DATA=${part_number} ;;
+	*)			;;	# We don't care about any others
 	esac;
 }
 
@@ -487,6 +502,7 @@ function populate_end() {
 	loop_detach
 }
 
+# Populate a partition using "raw" data from a file
 function populate_image() {
 	local part_number=$1
 	local source_image=$2
@@ -498,6 +514,29 @@ function populate_image() {
 	suser_dd if=${source_image} of=${LOOP} bs=${SECTOR_BYTES}
 
 	populate_end ${part_number}
+}
+
+# Populate a partition using an Android sparse file system image
+function populate_simage() {
+	local part_number=$1
+	local source_image=$2
+
+	# Unfortunately simg2img reported lseek64 problems when
+	# using a loop device as the output file, so we'll first
+	# create an image file, and then copy that over.
+	simg2img ${source_image} ${TEMPFILE} ||
+	nope "unable to expand ${source_image}"
+
+	populate_begin ${part_number}
+
+	# NOTE:  Partition space beyond the expanded source image is
+	# *not* zeroed.  We may wish to reconsider this at some point.
+	suser_dd if=${TEMPFILE} of=${LOOP} bs=${SECTOR_BYTES}
+
+	populate_end ${part_number}
+
+	# Free up the space we consumed
+	truncate -s 0 ${TEMPFILE}
 }
 
 # Fill the loader partition.  Always partition 1.
@@ -596,6 +635,34 @@ function populate_boot() {
 	bootscript_create | suser_cat ${MOUNT}/extlinux/extlinux.conf
 
 	populate_end ${part_number}
+}
+
+function populate_android_boot() {
+	local part_number=$1
+
+	echo "- Android boot"
+	populate_image ${part_number} ${ANDROID_BOOT_IMAGE}
+}
+
+function populate_android_system() {
+	local part_number=$1
+
+	echo "- Android system"
+	populate_simage ${part_number} ${ANDROID_SYSTEM_IMAGE}
+}
+
+function populate_android_cache() {
+	local part_number=$1
+
+	echo "- Android cache"
+	populate_simage ${part_number} ${ANDROID_CACHE_IMAGE}
+}
+
+function populate_android_user_data() {
+	local part_number=$1
+
+	echo "- Android user data"
+	populate_simage ${part_number} ${ANDROID_USER_DATA_IMAGE}
 }
 
 # Set up for building our USB image.  It will be formatted to have a
@@ -743,11 +810,22 @@ file_validate
 
 partition_init
 
-partition_define 8191    none loader
-partition_define 262144  vfat /boot
-partition_define 3923967 ext4 /
-# partition_define 5537791 ext4 /a
-# partition_define -1      ext4 /b
+if [ "${ANDROID_IMAGE}" ]; then
+	partition_define 8191     none loader
+	partition_define 81920    none android_boot
+	partition_define 2097152  ext4 android_system
+	partition_define 2097152  ext4 android_cache
+	partition_define 7247872 ext4 android_user_data
+	# The rest is unused (3737598 sectors)
+else
+	partition_define 8191    none loader
+	partition_define 262144  vfat /boot
+	partition_define 3923967 ext4 /
+	# We'll not use the rest (11075585 sectors) for now
+	# partition_define 5537791 ext4 /a
+	# partition_define -1      ext4 /b
+fi
+
 partition_validate
 
 partition_show
@@ -768,9 +846,22 @@ mkdir -p ${MOUNT} || nope "unable to create mount point \"${MOUNT}\""
 # Create the loader file and save it to its partition
 loader_create
 populate_loader
-[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
-[ "${PART_BOOT}" ] && populate_boot ${PART_BOOT}
-# We won't populate the other file systems for now
+
+# Now populate the rest of the paritions
+if [ "${ANDROID_IMAGE}" ]; then
+	[ "${PART_ANDROID_BOOT}" ] &&
+		populate_android_boot ${PART_ANDROID_BOOT}
+	[ "${PART_ANDROID_SYSTEM}" ] &&
+		populate_android_system ${PART_ANDROID_SYSTEM}
+	[ "${PART_ANDROID_CACHE}" ] &&
+		populate_android_cache ${PART_ANDROID_CACHE}
+	[ "${PART_ANDROID_USER_DATA}" ] &&
+		populate_android_user_data ${PART_ANDROID_USER_DATA}
+else
+	[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
+	[ "${PART_BOOT}" ] && populate_boot ${PART_BOOT}
+	# We won't populate the other file systems for now
+fi
 
 # Set up for building our USB image
 image_init
