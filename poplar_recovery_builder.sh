@@ -30,7 +30,7 @@ DEVICE_TREE_BINARY=hi3798cv200-poplar.dtb
 
 # Temporary output files
 IMAGE=disk_image	# disk image file
-MOUNT=binary		# mount point for disk image; also output directory
+MOUNT=mount		# mount point for disk image; also output directory
 
 # This is the ultimate output file
 USB_SIZE=4000000	# A little under 2 GB in sectors
@@ -47,7 +47,7 @@ function usage() {
 	echo >&2
 	echo "${PROGNAME}: $@" >&2
 	echo >&2
-	echo "Usage: ${PROGNAME} <rootfs_image>.tar.gz" >&2
+	echo "Usage: ${PROGNAME} <rootfs_archive>" >&2
 	echo >&2
 	exit 1
 }
@@ -453,6 +453,20 @@ function populate_loader() {
 	loop_detach
 }
 
+# produce the (expanded) output of a possibly compressed file
+function unpack() {
+	local file=$1
+	local cmd
+
+	case ${file} in
+	*.gz|*.tgz)	cmd=zcat ;;
+	*.xz|*.txz)	cmd=xzcat ;;
+	*.bz|*.tbz)	cmd=bzcat ;;
+	*)		cmd=cat ;;
+	esac
+	${cmd} ${file}
+}
+
 function populate_root() {
 	local part_number=$1
 	local offset=${PART_OFFSET[${part_number}]}
@@ -464,10 +478,12 @@ function populate_root() {
 	partition_mkfs ${part_number}
 	partition_mount
 
-	# The tar file containing the root file system uses "binary"
-	# as it's root directory; that'll be our mount point.  Mount
-	# the root file system, and mount what will be /boot within that.
-	sudo tar -xzf ${ROOT_FS_ARCHIVE} || nope "failed to populate root"
+	# Extract the root file system tar archive.  The unpack function
+	# allows several compressed formats to be used.  Archives from
+	# Linaro prefix paths with "binary"; strip that off if it's present.
+	unpack ${ROOT_FS_ARCHIVE} |
+	sudo tar -C ${MOUNT} -x --transform='s/^binary/./' -f - ||
+	nope "failed to populate root"
 
 	# Fill in /etc/fstab
 	fstab_init
@@ -671,8 +687,8 @@ function save_partition() {
 # Clean up in case we're killed or interrupted in a fairly normal way
 trap cleanup EXIT ERR SIGHUP SIGINT SIGQUIT SIGTERM
 
-# Make sure a root file system image was supplied
-[ $# -ne 1 ] && usage "no root file system image supplied"
+# Make sure a root file system archive was supplied
+[ $# -ne 1 ] && usage "no root file system archive supplied"
 ROOT_FS_ARCHIVE=$1
 
 echo
