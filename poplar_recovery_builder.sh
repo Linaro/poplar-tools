@@ -74,7 +74,7 @@ function suser_append() {
 }
 
 function cleanup() {
-	[ "${LOOP_MOUNTED}" ] && sudo umount ${LOOP}
+	[ "${LOOP_MOUNTED}" ] && partition_unmount
 	sudo rm -rf ${MOUNT}
 	[ "${LOOP_ATTACHED}" ] && loop_detach
 	rm -f ${LOADER}
@@ -619,8 +619,7 @@ function installer_finish() {
 	echo === building installer ===
 	# Naming the "compiled" script "boot.scr" makes it auto-boot
 	sudo mkimage -T script -A arm64 -C none -n 'Poplar Recovery' \
-		-d ${MOUNT}/${INSTALL_SCRIPT} \
-		${MOUNT}/${INSTALL_SCRIPT}.scr ||
+		-d ${MOUNT}/${INSTALL_SCRIPT} ${MOUNT}/${INSTALL_SCRIPT}.scr ||
 	nope "failed to build installer image"
 }
 
