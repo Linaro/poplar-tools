@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Copyright 2017 Linaro Limited
+#
+# SPDX-License-Identifier: GPL-2.0
+
 PROGNAME=$(basename $0)
 
 set -e		# Accept no failure
