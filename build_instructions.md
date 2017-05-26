@@ -85,7 +85,7 @@ package a USB recovery device.
     cd ${TOP}/poplar-u-boot
     make distclean
     make CROSS_COMPILE=${CROSS_64} poplar_defconfig
-    make CROSS_COMPILE=${CROSS_64} -j ${JOBCOUNT}
+    make CROSS_COMPILE=${CROSS_64}
 ```
 
 ### Step 2: Build ARM Trusted Firmware components.  
