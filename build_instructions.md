@@ -285,8 +285,7 @@ I'll want is "/dev/sdc" (based on "sdc" above).  Record this name:
 ```
 
   It will take about 5-10 minutes to complete writing out the contents
-  of the disk.  When this is done, the board will automatically
-  reset.  The result should look a bit like this:
+  of the disk.  The result should look a bit like this:
 
 ```shell
     ---------------------------
