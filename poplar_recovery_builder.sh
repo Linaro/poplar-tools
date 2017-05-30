@@ -728,8 +728,8 @@ echo === populating loader partition and file systems in image ===
 
 mkdir -p ${MOUNT} || nope "unable to create mount point \"${MOUNT}\""
 populate_loader
-populate_root ${PART_ROOT}
-populate_boot ${PART_BOOT}
+[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
+[ "${PART_BOOT}" ] && populate_boot ${PART_BOOT}
 # We won't populate the other file systems for now
 
 # Set up for building our USB image
