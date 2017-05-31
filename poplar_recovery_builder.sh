@@ -442,19 +442,42 @@ function loader_create() {
 	nope "failed to create loader"
 }
 
+function populate_begin() {
+	local part_number=$1
+	local offset=${PART_OFFSET[${part_number}]}
+	local size=${PART_SIZE[${part_number}]}
+	local fstype=${PART_FSTYPE[${part_number}]}
+
+	loop_attach ${offset} ${size} ${IMAGE}
+	[ "${fstype}" == none ] && return
+
+	partition_mkfs ${part_number}
+	partition_mount
+}
+
+function populate_end() {
+	local part_number=$1
+	local fstype=${PART_FSTYPE[${part_number}]}
+
+	[ "${fstype}" != none ] && partition_unmount
+	loop_detach
+}
+
 # Fill the loader partition.  Always partition 1.
 function populate_loader() {
-	local offset=${PART_OFFSET[1]}
-	local size=${PART_SIZE[1]}
+	local part_number=1	# Not dollar-1, just 1
 
 	echo "- loader"
 
-	loop_attach ${offset} ${size} ${IMAGE}
+	populate_begin ${part_number}
 
-	# Just copy in the loader file we already created
-	suser_dd if=${LOADER} of=${LOOP} bs=${SECTOR_BYTES} count=${size}
+	# Just copy in the loader file we already created.
+	#
+	# NOTE:  Partition space beyond the loader image is
+	# *not* zeroed.  We may wish to reconsider this.
+	suser_dd if=${LOADER} of=${LOOP} bs=${SECTOR_BYTES}
 
-	loop_detach
+	populate_end ${part_number}
 }
 
 # produce the (expanded) output of a possibly compressed file
@@ -473,14 +496,10 @@ function unpack() {
 
 function populate_root() {
 	local part_number=$1
-	local offset=${PART_OFFSET[${part_number}]}
-	local size=${PART_SIZE[${part_number}]}
 
 	echo "- root file system"
 
-	loop_attach ${offset} ${size} ${IMAGE}
-	partition_mkfs ${part_number}
-	partition_mount
+	populate_begin ${part_number}
 
 	# Extract the root file system tar archive.  The unpack function
 	# allows several compressed formats to be used.  Archives from
@@ -495,8 +514,7 @@ function populate_root() {
 		fstab_add ${i}
 	done
 
-	partition_unmount
-	loop_detach
+	populate_end ${part_number}
 }
 
 # Output the kernel command line arguments.
@@ -525,14 +543,10 @@ function bootscript_create() {
 
 function populate_boot() {
 	local part_number=$1
-	local offset=${PART_OFFSET[${part_number}]}
-	local size=${PART_SIZE[${part_number}]}
 
 	echo "- /boot"
 
-	loop_attach ${offset} ${size} ${IMAGE}
-	partition_mkfs ${part_number}
-	partition_mount
+	populate_begin ${part_number}
 
 	# Save a copy of our loader partition into a file in /boot
 	cat ${LOADER} | suser_dd of=${MOUNT}/${LOADER}
@@ -552,8 +566,7 @@ function populate_boot() {
 	nope "failed to save extlinux directory to boot partition"
 	bootscript_create | suser_dd of=${MOUNT}/extlinux/extlinux.conf
 
-	partition_unmount
-	loop_detach
+	populate_end ${part_number}
 }
 
 # Set up for building our USB image.  It will be formatted to have a
