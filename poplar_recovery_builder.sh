@@ -726,9 +726,6 @@ partition_validate
 
 partition_show
 
-# Create our loader file (the same size as partition 1)
-loader_create
-
 # To go any further we need superuser privilege
 suser
 
@@ -741,6 +738,9 @@ disk_finish
 echo === populating loader partition and file systems in image ===
 
 mkdir -p ${MOUNT} || nope "unable to create mount point \"${MOUNT}\""
+
+# Create the loader file and save it to its partition
+loader_create
 populate_loader
 [ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
 [ "${PART_BOOT}" ] && populate_boot ${PART_BOOT}
