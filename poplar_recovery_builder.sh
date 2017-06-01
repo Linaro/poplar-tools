@@ -64,6 +64,12 @@ function suser() {
 	SUSER=yes
 }
 
+function suser_cat() {
+	local file=$1
+
+	sudo dd of=${file} status=none || nope "error writing \"${file}\""
+}
+
 function suser_dd() {
 	local dd_args=$*
 
@@ -406,7 +412,7 @@ function disk_finish() {
 
 function fstab_init() {
 	echo "# /etc/fstab: static file system information." |
-	suser_dd of=${MOUNT}/etc/fstab
+	suser_cat ${MOUNT}/etc/fstab
 }
 
 function fstab_add() {
@@ -555,7 +561,7 @@ function populate_boot() {
 	populate_begin ${part_number}
 
 	# Save a copy of our loader partition into a file in /boot
-	cat ${LOADER} | suser_dd of=${MOUNT}/${LOADER}
+	cat ${LOADER} | suser_cat ${MOUNT}/${LOADER}
 
 	# Now copy in the kernel image, DTB, and extlinux directories
 	sudo cp ${KERNEL_IMAGE} ${MOUNT} ||
@@ -570,7 +576,7 @@ function populate_boot() {
 	# Set up the extlinux.conf file
 	sudo mkdir -p ${MOUNT}/extlinux ||
 	nope "failed to save extlinux directory to boot partition"
-	bootscript_create | suser_dd of=${MOUNT}/extlinux/extlinux.conf
+	bootscript_create | suser_cat ${MOUNT}/extlinux/extlinux.conf
 
 	populate_end ${part_number}
 }
