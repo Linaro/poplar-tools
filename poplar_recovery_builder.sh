@@ -182,6 +182,18 @@ function loop_detach() {
 	unset LOOP_ATTACHED
 }
 
+# Certain partitions are special, and for those we record their number
+function map_description() {
+	local part_number=$1
+	local description=$2
+
+	case ${description} in
+	/)	PART_ROOT=${part_number} ;;
+	/boot)	PART_BOOT=${part_number} ;;
+	*)	;;	# We don't care about any others
+	esac;
+}
+
 function partition_init() {
 	PART_COUNT=0	# Total number of partitions, including extended
 	DISK_OFFSET=0	# Next available offset on the disk
@@ -246,8 +258,7 @@ function partition_define() {
 	PART_SIZE[${part_number}]=${part_size}
 	PART_FSTYPE[${part_number}]=${part_fstype}
 	DESCRIPTION[${part_number}]=${description}
-	[ "${description}" = / ] && PART_ROOT=${part_number}
-	[ "${description}" = /boot ] && PART_BOOT=${part_number}
+	map_description ${part_number} ${description}
 
 	# Consume the partition on the disk
 	DISK_OFFSET=$(expr ${part_offset} + ${part_size})
