@@ -464,21 +464,26 @@ function populate_end() {
 	loop_detach
 }
 
+function populate_image() {
+	local part_number=$1
+	local source_image=$2
+
+	populate_begin ${part_number}
+
+	# NOTE:  Partition space beyond the source image is *not* zeroed.
+	# We may wish to reconsider this at some point.
+	suser_dd if=${source_image} of=${LOOP} bs=${SECTOR_BYTES}
+
+	populate_end ${part_number}
+}
+
 # Fill the loader partition.  Always partition 1.
 function populate_loader() {
 	local part_number=1	# Not dollar-1, just 1
 
+	# Just image copy the loader file we already created.
 	echo "- loader"
-
-	populate_begin ${part_number}
-
-	# Just copy in the loader file we already created.
-	#
-	# NOTE:  Partition space beyond the loader image is
-	# *not* zeroed.  We may wish to reconsider this.
-	suser_dd if=${LOADER} of=${LOOP} bs=${SECTOR_BYTES}
-
-	populate_end ${part_number}
+	populate_image ${part_number} ${LOADER}
 }
 
 # produce the (expanded) output of a possibly compressed file
