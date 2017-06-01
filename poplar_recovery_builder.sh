@@ -51,15 +51,27 @@ function usage() {
 	echo >&2
 	echo "${PROGNAME}: $@" >&2
 	echo >&2
-	echo "Usage: ${PROGNAME} <rootfs_archive>" >&2
+	echo "Usage: ${PROGNAME} <arg>" >&2
+	echo >&2
+	echo "  for a Linux image, <arg> is a root file system tar archive" >&2
+	echo "  if <arg> is \"android\" an Android image is built" >&2
 	echo >&2
 	exit 1
 }
 
 function parseargs() {
-	# Make sure a root file system archive was supplied
-	[ $# -ne 1 ] && usage "no root file system archive supplied"
-	ROOT_FS_ARCHIVE=$1
+	# Make sure a single argument was supplied
+	[ $# -ne 1 ] && usage "missing argument"
+	INPUT_FILES="L_LOADER USB_LOADER"
+	if [ "$1" = "android" ]; then
+		usage "Android image creation is not yet supported"
+		ANDROID_IMAGE=true
+	else
+		ROOT_FS_ARCHIVE=$1
+		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
+		INPUT_FILES="${INPUT_FILES} DEVICE_TREE_BINARY"
+		INPUT_FILES="${INPUT_FILES} ROOT_FS_ARCHIVE"
+	fi
 }
 
 function suser() {
@@ -134,12 +146,11 @@ function file_validate() {
 	done
 
 	# Make sure all the input files we need *do* exist and are readable
-	for i in L_LOADER USB_LOADER ROOT_FS_ARCHIVE KERNEL_IMAGE \
-			DEVICE_TREE_BINARY; do
+	for i in ${INPUT_FILES} ; do
 		file=$(eval echo \${$i})
 		[ -f ${file} ] || nope "$i file \"$file\" does not exist"
-		[ -r ${file} ] || nope "$i file \"$file\" is not readable"
-		[ -s ${file} ] || nope "$i file \"$file\" is empty"
+		[ -r ${file} ] || nope "$i \"$file\" is not readable"
+		[ -s ${file} ] || nope "$i \"$file\" is empty"
 	done
 	[ $(file_bytes ${L_LOADER}) -gt ${SECTOR_BYTES} ] ||
 	nope "l_loader is much too small"
