@@ -56,6 +56,12 @@ function usage() {
 	exit 1
 }
 
+function parseargs() {
+	# Make sure a root file system archive was supplied
+	[ $# -ne 1 ] && usage "no root file system archive supplied"
+	ROOT_FS_ARCHIVE=$1
+}
+
 function suser() {
 	echo
 	echo To continue, superuser credentials are required.
@@ -716,9 +722,7 @@ function save_partition() {
 # Clean up in case we're killed or interrupted in a fairly normal way
 trap cleanup EXIT ERR SIGHUP SIGINT SIGQUIT SIGTERM
 
-# Make sure a root file system archive was supplied
-[ $# -ne 1 ] && usage "no root file system archive supplied"
-ROOT_FS_ARCHIVE=$1
+parseargs "$@"
 
 echo
 echo ====== Poplar recovery image builder ======
