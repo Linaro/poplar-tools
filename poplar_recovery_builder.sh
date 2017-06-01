@@ -190,21 +190,17 @@ function partition_init() {
 function partition_define() {
 	local part_size=$1
 	local part_fstype=$2
+	local description=$3
 	local part_offset=${DISK_OFFSET}	# might change, below
 	local part_number=$(expr ${PART_COUNT} + 1)
 	local need_boot_record	# By default, no
 	local remaining
-	local mount_point
 
 	[ ${part_size} -ne 0 ] || nope "partition size must be non-zero"
 
 	[ ${EMMC_SIZE} -gt ${DISK_OFFSET} ] || nope "disk space exhausted"
 
 	remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
-	if [ $# -gt 2 ]; then
-		[ "${3:0:1}" != / ] && nope "bad mount point \"$3\""
-		mount_point=$3
-	fi
 
 	# The first partition is preceded by a 1-sector MBR.  The fourth
 	# partition is extended (and accounted for silently below).  All
@@ -249,11 +245,9 @@ function partition_define() {
 	PART_OFFSET[${part_number}]=${part_offset}
 	PART_SIZE[${part_number}]=${part_size}
 	PART_FSTYPE[${part_number}]=${part_fstype}
-	if [ "${mount_point}" ]; then
-		MOUNT_POINT[${part_number}]=${mount_point}
-		[ "${mount_point}" = / ] && PART_ROOT=${part_number}
-		[ "${mount_point}" = /boot ] && PART_BOOT=${part_number}
-	fi
+	DESCRIPTION[${part_number}]=${description}
+	[ "${description}" = / ] && PART_ROOT=${part_number}
+	[ "${description}" = /boot ] && PART_BOOT=${part_number}
 
 	# Consume the partition on the disk
 	DISK_OFFSET=$(expr ${part_offset} + ${part_size})
@@ -315,7 +309,7 @@ function partition_show() {
 
 	echo === Using the following disk layout ===
 
-	printf "# %8s %8s %8s %7s %s\n" Start Size Type "FS Type" "Mount Point"
+	printf "# %8s %8s %8s %7s %s\n" Start Size Type "FS Type" "Description"
 	# The "\055" is just a (leading) dash character (-)
 	printf "\055 %8s %8s %8s %7s %s\n" ----- ---- ---- ------- -----------
 	printf "* %8u %8u %8s\n" 0 1 MBR
@@ -325,14 +319,10 @@ function partition_show() {
 			printf "* %8u %8u %8s\n" ${ebr_offset} 1 EBR
 		fi
 		printf "%1u %8u %8u %8s" $i \
-			${PART_OFFSET[$i]} ${PART_SIZE[$i]} \
-			${PART_TYPE[$i]}
-		if [ $i -eq 1 ]; then
-			printf " %7s %s" "" "(loader)"
-		elif [ $i -ne 4 ]; then
-			# No FS type or mount point for the extended partition
-			printf " %7s %s" ${PART_FSTYPE[$i]} ${MOUNT_POINT[$i]}
-		fi
+			${PART_OFFSET[$i]} ${PART_SIZE[$i]} ${PART_TYPE[$i]}
+		# No FS type or description for the extended partition
+		[ $i -ne 4 ] &&
+			printf " %7s %s" ${PART_FSTYPE[$i]} ${DESCRIPTION[$i]}
 		echo
 	done
 	echo "Total EMMC size is ${EMMC_SIZE} ${SECTOR_BYTES}-byte sectors"
@@ -416,7 +406,7 @@ function fstab_add() {
 	[ ${part_number} -eq 1 ] && return	# Skip the loader partition
 	[ ${part_number} -eq 4 ] && return	# Skip the extended partition
 
-	mount_point=${MOUNT_POINT[${part_number}]}
+	mount_point=${DESCRIPTION[${part_number}]}
 	fstype=${PART_FSTYPE[${part_number}]}
 
 	# Make sure the mount point exists in the target environment
@@ -716,7 +706,7 @@ file_validate
 
 partition_init
 
-partition_define 8191    none		# loader
+partition_define 8191    none loader
 partition_define 262144  vfat /boot
 partition_define 3923967 ext4 /
 # partition_define 5537791 ext4 /a
