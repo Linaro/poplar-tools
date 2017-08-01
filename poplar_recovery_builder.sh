@@ -15,6 +15,7 @@ EMMC_SIZE=15269888	# 7456 MB in sectors (not hex)
 CHUNK_SIZE=524288	# Partition image chuck size in sectors (not hex)
 IN_ADDR=0x08000000	# Buffer address for compressed data in from USB (hex)
 OUT_ADDR=0x10000000	# Buffer address for uncompressed data for MMC (hex)
+SUB_ADDR=0x07800000	# Buffer address for sub-installer scripts
 EMMC_IO_BYTES=0x100000	# EMMC write buffer size in bytes (hex)
 
 EMMC_DEV=/dev/mmcblk0	# Linux path to main eMMC device on target
@@ -731,6 +732,25 @@ function installer_init() {
 	installer_update ""
 }
 
+function installer_init_sub_script() {
+	local sub_script="${INSTALL_SCRIPT}-$1"; shift
+	local description="$@"
+
+	# Add commands to the top-level script to source the one we
+	# will be created.  It will be compiled into a binary file
+	# with the extension ".scr" when we're done creating it
+	installer_update "# ${description}"
+	installer_update "fatload usb 0:1 ${SUB_ADDR} ${sub_script}.scr"
+	installer_update "source ${SUB_ADDR}"
+	installer_update ""
+
+	# Switch to the sub-script file and give it a short header
+	CURRENT_SCRIPT=${MOUNT}/${sub_script}
+	sudo cp /dev/null ${CURRENT_SCRIPT}
+	installer_update "# ${description}"
+	installer_update ""
+}
+
 function installer_add_file() {
 	local filename=$1;
 	local offset=$(printf "0x%08x" $2)
@@ -747,6 +767,14 @@ function installer_add_file() {
 	installer_update "mmc write ${OUT_ADDR} ${offset} ${hex_size}"
 	installer_update "echo"
 	installer_update ""
+}
+
+function installer_finish_sub_script() {
+	# Compile the sub-script into <filename>.scr, then switch
+	# back to the top-level sript.
+	installer_compile $(basename ${CURRENT_SCRIPT})
+
+	CURRENT_SCRIPT=${MOUNT}/${INSTALL_SCRIPT}
 }
 
 function installer_finish() {
@@ -773,11 +801,15 @@ function save_boot_record() {
 function save_layout() {
 	local i
 
+	installer_init_sub_script layout "# Partition layout (MBR and EBRs)"
+
 	save_boot_record mbr 0
 	# Partitions 5 and above require an Extended Boot Record
 	for i in $(seq 5 ${PART_COUNT}); do
 		save_boot_record ebr$i.bin $(expr ${PART_OFFSET[$i]} - 1)
 	done
+
+	installer_finish_sub_script
 }
 
 # Split up partition into chunks; the last may be short.  We do this
@@ -792,6 +824,9 @@ function save_partition() {
 	local chunk_size=${CHUNK_SIZE}
 	local count=1;
 	local limit=$(howmany ${size} ${chunk_size})
+	local desc="# Partition ${part_number} (${DESCRIPTION[${part_number}]})"
+
+	installer_init_sub_script ${part_name} "${desc}"
 
 	while true; do
 		local filename=${part_name}.${count}-of-${limit};
@@ -810,6 +845,8 @@ function save_partition() {
 		# Exit loop when it's all written; use "expr" exit status
 		size=$(expr ${size} - ${chunk_size}) || break
 	done
+
+	installer_finish_sub_script
 }
 
 ############################
