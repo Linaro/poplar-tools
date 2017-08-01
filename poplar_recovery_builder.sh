@@ -700,35 +700,31 @@ function image_finish() {
 	loop_detach
 }
 
+function installer_update() {
+	echo "$@" | suser_append ${MOUNT}/${INSTALL_SCRIPT}
+}
+
 function installer_init() {
 	echo
 	echo === generating installation files ===
 
 	sudo cp /dev/null ${MOUNT}/${INSTALL_SCRIPT}
 	if [ "${IMAGE_TYPE}" = Android ]; then
-		cat <<-! | suser_append ${MOUNT}/${INSTALL_SCRIPT}
-			# Poplar USB flash drive ${IMAGE_TYPE} recovery script
-			# Created $(date)
-
-			usb start
-
-		!
+		installer_update "# Poplar USB flash drive ${IMAGE_TYPE} recovery"
+		installer_update "# Created $(date)"
+		installer_update ""
+		installer_update "usb start"
+		installer_update ""
 	else
-		cat <<-! | suser_append ${MOUNT}/${INSTALL_SCRIPT}
-			# Poplar USB flash drive ${IMAGE_TYPE} recovery script
-			# Created $(date)
-			#
-			# Root file system built from:
-			#    ${ROOT_FS_ARCHIVE}
-
-			usb start
-
-		!
+		installer_update "# Poplar USB flash drive ${IMAGE_TYPE} recovery"
+		installer_update "# Created $(date)"
+		installer_update "#"
+		installer_update "# Root file system built from:"
+		installer_update "#    ${ROOT_FS_ARCHIVE}"
+		installer_update ""
+		installer_update "usb start"
+		installer_update ""
 	fi
-}
-
-function installer_update() {
-	echo "$@" | suser_append ${MOUNT}/${INSTALL_SCRIPT}
 }
 
 function installer_add_file() {
@@ -750,10 +746,8 @@ function installer_add_file() {
 }
 
 function installer_finish() {
-	sudo cat <<-! | suser_append ${MOUNT}/${INSTALL_SCRIPT}
-		echo ============== INSTALLATION IS DONE ===============
-		echo (Please remove the USB stick and reset your board)
-	!
+	installer_update "echo ============ INSTALLATION IS DONE ============="
+	installer_update "echo (Please remove USB drive and reset your board)"
 
 	echo
 	echo === building installer ===
