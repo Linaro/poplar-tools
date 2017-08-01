@@ -709,22 +709,16 @@ function installer_init() {
 	echo === generating installation files ===
 
 	sudo cp /dev/null ${MOUNT}/${INSTALL_SCRIPT}
-	if [ "${IMAGE_TYPE}" = Android ]; then
-		installer_update "# Poplar USB flash drive ${IMAGE_TYPE} recovery"
-		installer_update "# Created $(date)"
-		installer_update ""
-		installer_update "usb start"
-		installer_update ""
-	else
-		installer_update "# Poplar USB flash drive ${IMAGE_TYPE} recovery"
-		installer_update "# Created $(date)"
-		installer_update "#"
+	installer_update "# Poplar USB flash drive ${IMAGE_TYPE} recovery"
+	installer_update "# Created $(date)"
+	installer_update ""
+	if [ "${IMAGE_TYPE}" = Linux ]; then
 		installer_update "# Root file system built from:"
 		installer_update "#    ${ROOT_FS_ARCHIVE}"
 		installer_update ""
-		installer_update "usb start"
-		installer_update ""
 	fi
+	installer_update "usb start"
+	installer_update ""
 }
 
 function installer_add_file() {
