@@ -701,22 +701,24 @@ function image_finish() {
 }
 
 function installer_update() {
-	echo "$@" | suser_append ${MOUNT}/${INSTALL_SCRIPT}
+	echo "$@" | suser_append ${CURRENT_SCRIPT}
 }
 
 function installer_compile() {
 	local description="$@"
 
 	sudo mkimage -T script -A arm64 -C none -n "${description}" \
-		-d ${MOUNT}/${INSTALL_SCRIPT} ${MOUNT}/${INSTALL_SCRIPT}.scr ||
-	nope "failed to compile image for \"${MOUNT}/${INSTALL_SCRIPT}\""
+		-d ${CURRENT_SCRIPT} ${CURRENT_SCRIPT}.scr ||
+	nope "failed to compile image for \"${CURRENT_SCRIPT}\""
 }
 
 function installer_init() {
 	echo
 	echo === generating installation files ===
 
-	sudo cp /dev/null ${MOUNT}/${INSTALL_SCRIPT}
+	CURRENT_SCRIPT=${MOUNT}/${INSTALL_SCRIPT}
+	sudo cp /dev/null ${CURRENT_SCRIPT}
+
 	installer_update "# Poplar USB flash drive ${IMAGE_TYPE} recovery"
 	installer_update "# Created $(date)"
 	installer_update ""
@@ -754,6 +756,8 @@ function installer_finish() {
 	echo
 	echo === building installer ===
 	installer_compile "Poplar Recovery"
+
+	unset CURRENT_SCRIPT
 }
 
 function save_boot_record() {
