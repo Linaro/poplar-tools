@@ -759,7 +759,16 @@ function save_boot_record() {
 	suser_dd if=${IMAGE} of=${filepath} bs=${SECTOR_BYTES} \
 			skip=${offset} count=1
 	installer_add_file ${filename} ${offset}
+}
 
+function save_layout() {
+	local i
+
+	save_boot_record mbr 0
+	# Partitions 5 and above require an Extended Boot Record
+	for i in $(seq 5 ${PART_COUNT}); do
+		save_boot_record ebr$i.bin $(expr ${PART_OFFSET[$i]} - 1)
+	done
 }
 
 # Split up partition into chunks; the last may be short.  We do this
@@ -872,11 +881,7 @@ installer_init
 sudo cp ${USB_LOADER} ${MOUNT}/fastboot.bin
 
 # Start with the partitioning metadata--MBR and all EBRs
-save_boot_record mbr 0
-# Partitions 5 and above require an Extended Boot Record
-for i in $(seq 5 ${PART_COUNT}); do
-	save_boot_record ebr$i.bin $(expr ${PART_OFFSET[$i]} - 1)
-done
+save_layout
 
 # Now save off our partition into files used for installation.
 for i in $(seq 1 ${PART_COUNT}); do
