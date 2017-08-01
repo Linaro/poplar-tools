@@ -704,6 +704,14 @@ function installer_update() {
 	echo "$@" | suser_append ${MOUNT}/${INSTALL_SCRIPT}
 }
 
+function installer_compile() {
+	local description="$@"
+
+	sudo mkimage -T script -A arm64 -C none -n "${description}" \
+		-d ${MOUNT}/${INSTALL_SCRIPT} ${MOUNT}/${INSTALL_SCRIPT}.scr ||
+	nope "failed to compile image for \"${MOUNT}/${INSTALL_SCRIPT}\""
+}
+
 function installer_init() {
 	echo
 	echo === generating installation files ===
@@ -745,10 +753,7 @@ function installer_finish() {
 
 	echo
 	echo === building installer ===
-	# Naming the "compiled" script "boot.scr" makes it auto-boot
-	sudo mkimage -T script -A arm64 -C none -n 'Poplar Recovery' \
-		-d ${MOUNT}/${INSTALL_SCRIPT} ${MOUNT}/${INSTALL_SCRIPT}.scr ||
-	nope "failed to build installer image"
+	installer_compile "Poplar Recovery"
 }
 
 function save_boot_record() {
