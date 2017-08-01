@@ -71,12 +71,13 @@ function parseargs() {
 	[ $# -ne 1 ] && usage "missing argument"
 	INPUT_FILES="L_LOADER USB_LOADER"
 	if [ "$1" = "android" ]; then
-		ANDROID_IMAGE=true
+		IMAGE_TYPE=Android
 		INPUT_FILES="${INPUT_FILES} ANDROID_BOOT_IMAGE"
 		INPUT_FILES="${INPUT_FILES} ANDROID_SYSTEM_IMAGE"
 		INPUT_FILES="${INPUT_FILES} ANDROID_CACHE_IMAGE"
 		INPUT_FILES="${INPUT_FILES} ANDROID_USER_DATA_IMAGE"
 	else
+		IMAGE_TYPE=Linux
 		ROOT_FS_ARCHIVE=$1
 		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
 		INPUT_FILES="${INPUT_FILES} DEVICE_TREE_BINARY"
@@ -810,7 +811,7 @@ file_validate
 
 partition_init
 
-if [ "${ANDROID_IMAGE}" ]; then
+if [ "${IMAGE_TYPE}" = Android ]; then
 	partition_define 8191     none loader
 	partition_define 81920    none android_boot
 	partition_define 2097152  ext4 android_system
@@ -848,7 +849,7 @@ loader_create
 populate_loader
 
 # Now populate the rest of the paritions
-if [ "${ANDROID_IMAGE}" ]; then
+if [ "${IMAGE_TYPE}" = Android ]; then
 	[ "${PART_ANDROID_BOOT}" ] &&
 		populate_android_boot ${PART_ANDROID_BOOT}
 	[ "${PART_ANDROID_SYSTEM}" ] &&
