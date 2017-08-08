@@ -115,7 +115,7 @@ function suser_append() {
 
 function cleanup() {
 	[ "${LOOP_MOUNTED}" ] && partition_unmount
-	sudo rm -rf ${MOUNT}
+	rm -rf ${MOUNT}
 	[ "${LOOP_ATTACHED}" ] && loop_detach
 	rm -f ${LOADER}
 	rm -f ${IMAGE}
