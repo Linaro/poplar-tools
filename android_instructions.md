@@ -31,25 +31,24 @@ This list may well grow, but at least you'll need the following:
 ```
 
 ### Step 3: Get the source code for the boot loader components.
-  The "alex/baseline" branch in these repositories should always point to a
+  The "latest" branch in these repositories should always point to a
   known working copy of the code.
 
 ```shell
   cd ${TOP}
-  git clone https://github.com/linaro/poplar-tools.git -b alex/baseline
-  git clone https://github.com/linaro/poplar-l-loader.git -b alex/baseline
-  git clone https://github.com/linaro/poplar-arm-trusted-firmware.git -b alex/baseline
-  git clone https://github.com/linaro/poplar-u-boot.git -b alex/baseline
-```
+  git clone https://github.com/linaro/poplar-tools.git -b latest
+  git clone https://github.com/linaro/poplar-l-loader.git -b latest
+  git clone https://github.com/linaro/poplar-arm-trusted-firmware.git -b latest
+  git clone https://github.com/linaro/poplar-u-boot.git -b latest
 
 ### Step 4: Get the HiSilicon SDK source code
-  We'll use the "baselline" branch in the HiSilicon Linux SDK and the
+  We'll use the "master" branch in the HiSilicon Linux SDK and the
   SDK Linux kernel trees:
 
 ```shell
   cd ${TOP}
-  git clone ssh://git@dev-private-git.linaro.org/aspen/staging/linux-sdk.git -b alex/baseline
-  git clone ssh://git@dev-private-git.linaro.org/aspen/staging/linux.git -b alex/baseline
+  git clone ssh://git@dev-private-git.linaro.org/aspen/staging/linux-sdk.git
+  git clone ssh://git@dev-private-git.linaro.org/aspen/staging/linux.git
 ```
   Note that the "linux-sdk" tree is the bulk of the SDK code.  The
   Linux kernel code has been extracted from that tree and put in a
@@ -68,7 +67,8 @@ This list may well grow, but at least you'll need the following:
 		-b android-7.1.1_r3
   repo sync -j8
 ```
-  We now need to download code to add Poplar support.
+  We now need to download code to add Poplar support.  We'll use the
+  "master" branch here as well.
 
 ```shell
   cd ${TOP}
@@ -76,8 +76,7 @@ This list may well grow, but at least you'll need the following:
   mkdir device/hisilicon
   cd device/hisilicon
   git clone \
-	ssh://git@dev-private-git.linaro.org/aspen/staging/device/linaro/poplar.git \
-	-b alex/baseline
+    ssh://git@dev-private-git.linaro.org/aspen/staging/device/linaro/poplar.git
 ```
 ### Step 6: Prepare for building the boot code
   Almost everything uses aarch64, but one item (l-loader.bin) must
