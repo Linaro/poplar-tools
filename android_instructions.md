@@ -18,8 +18,16 @@ This list may well grow, but at least you'll need the following:
 ```shell
       sudo apt-get update
       sudo apt-get upgrade
+      sudo apt-get install device-tree-compiler libssl-dev u-boot-tools screen android-tools-fsutils
+```
+
+Android has specific build requirements and this is spelled out on "Establishing
+a Build Environment" (https://source.android.com/source/initializing).
+When Building on an Ubuntu 16.04.03 build system, the following
+other packages were needed
+```shell
       sudo apt-get install openjdk-8-jdk flex
-      sudo apt-get install device-tree-compiler libssl-dev u-boot-tools
+      sudo apt-get install flex bison curl ccache git-core gnupg gperf build-essential libc6-dev-i386 libxml2-utils
 ```
 
 ### Step 2: Set up the working directory.
@@ -40,6 +48,8 @@ This list may well grow, but at least you'll need the following:
   git clone https://github.com/linaro/poplar-l-loader.git -b latest
   git clone https://github.com/linaro/poplar-arm-trusted-firmware.git -b latest
   git clone https://github.com/linaro/poplar-u-boot.git -b latest
+
+```
 
 ### Step 4: Get the HiSilicon SDK source code
   We'll use the "master" branch in the HiSilicon Linux SDK and the
