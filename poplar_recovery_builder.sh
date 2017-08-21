@@ -143,7 +143,8 @@ function howmany() {
 function file_bytes() {
 	local filename=$1
 
-	stat --format="%s" ${filename} || nope "unable to stat \"${filename}\""
+	stat --dereference --format="%s" ${filename} ||
+	nope "unable to stat \"${filename}\""
 }
 
 # Make sure we have all our input files, and don't clobber anything
