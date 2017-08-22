@@ -42,6 +42,10 @@ ANDROID_USER_DATA_IMAGE=userdata.img
 IMAGE=disk_image	# disk image file
 MOUNT=mount		# mount point for disk image; also output directory
 
+# PRESERVE_BRS represents whether the "-b" flag was supplied.
+# If it was, we make a copy of all boot records (MBR and any EBRs)
+# in the current directory as we go.
+
 # This is the ultimate output file
 USB_SIZE=4000000	# A little under 2 GB in sectors
 USB_IMG=usb_recovery.img
@@ -59,8 +63,9 @@ function usage() {
 	echo >&2
 	echo "${PROGNAME}: $@" >&2
 	echo >&2
-	echo "Usage: ${PROGNAME} <arg>" >&2
+	echo "Usage: ${PROGNAME} [-b] <arg>" >&2
 	echo >&2
+	echo "  if -b is supplied, boot record(s) (mbr/ebr) are saved" >&2
 	echo "  for a Linux image, <arg> is a root file system tar archive" >&2
 	echo "  if <arg> is \"android\" an Android image is built" >&2
 	echo >&2
@@ -69,7 +74,15 @@ function usage() {
 
 function parseargs() {
 	# Make sure a single argument was supplied
+	[ $# -lt 1 ] && usage "no arguments supplied"
+	if [ ${1:0:1} = - ]; then
+		local flag=$1; shift
+
+		[ x$flag = x-b ] || usage "unknown flag '$flag'"
+		PRESERVE_BRS=yes
+	fi
 	[ $# -ne 1 ] && usage "missing argument"
+
 	INPUT_FILES="L_LOADER USB_LOADER"
 	if [ "$1" = "android" ]; then
 		IMAGE_TYPE=Android
@@ -359,7 +372,11 @@ function partition_show() {
 	local i
 	local ebr_offset
 
-	echo === Using the following disk layout ===
+	echo -n === Using the following disk layout
+	[ "${PRESERVE_BRS}" = yes ] &&
+		echo -n " (MBR and EBRs will be preserved)"
+	echo " ==="
+	echo
 
 	printf "# %8s %8s %8s %7s %s\n" Start Size Type "FS Type" "Description"
 	# The "\055" is just a (leading) dash character (-)
@@ -796,6 +813,7 @@ function save_boot_record() {
 
 	suser_dd if=${IMAGE} of=${filepath} bs=${SECTOR_BYTES} \
 			skip=${offset} count=1
+	[ "${PRESERVE_BRS}" = yes ] && cp ${filepath} ${filename}
 	installer_add_file ${filename} ${offset}
 }
 
@@ -804,7 +822,7 @@ function save_layout() {
 
 	installer_init_sub_script layout "# Partition layout (MBR and EBRs)"
 
-	save_boot_record mbr 0
+	save_boot_record mbr.bin 0
 	# Partitions 5 and above require an Extended Boot Record
 	for i in $(seq 5 ${PART_COUNT}); do
 		save_boot_record ebr$i.bin $(expr ${PART_OFFSET[$i]} - 1)
