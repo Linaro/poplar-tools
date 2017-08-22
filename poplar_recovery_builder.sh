@@ -886,9 +886,9 @@ partition_init
 if [ "${IMAGE_TYPE}" = Android ]; then
 	partition_define 8191     none loader
 	partition_define 81920    none android_boot
-	partition_define 2097152  ext4 android_system
-	partition_define 2097152  ext4 android_cache
-	partition_define 7247872 ext4 android_user_data
+	partition_define 2097151  ext4 android_system
+	partition_define 2097151  ext4 android_cache
+	partition_define 10985472 ext4 android_user_data
 	# The rest is unused (3737598 sectors)
 else
 	partition_define 8191    none loader
