@@ -13,10 +13,10 @@ SECTOR_BYTES=512
 EMMC_SIZE=15269888	# 7456 MB in sectors (not hex)
 
 CHUNK_SIZE=524288	# Partition image chuck size in sectors (not hex)
+
 IN_ADDR=0x08000000	# Buffer address for compressed data in from USB (hex)
 OUT_ADDR=0x10000000	# Buffer address for uncompressed data for MMC (hex)
 SUB_ADDR=0x07800000	# Buffer address for sub-installer scripts
-EMMC_IO_BYTES=0x100000	# EMMC write buffer size in bytes (hex)
 
 EMMC_DEV=/dev/mmcblk0	# Linux path to main eMMC device on target
 
@@ -39,33 +39,49 @@ ANDROID_CACHE_IMAGE=cache.img
 ANDROID_USER_DATA_IMAGE=userdata.img
 
 # Temporary output files
-IMAGE=disk_image	# disk image file
 MOUNT=mount		# mount point for disk image; also output directory
 
-# PRESERVE_BRS represents whether the "-b" flag was supplied.
-# If it was, we make a copy of all boot records (MBR and any EBRs)
-# in the current directory as we go.
+# Directory in which copies of output files are created
+RECOVERY=recovery_files
 
 # This is the ultimate output file
 USB_SIZE=4000000	# A little under 2 GB in sectors
-USB_IMG=usb_recovery.img
 
 # content that gets transferred to USB stick
 
-LOADER=loader.bin	# in /boot on target; omits 1st sector of l-loader.bin
+LOADER=${RECOVERY}/loader.bin	# omits 1st sector of l-loader.bin
 INSTALL_SCRIPT=install	# for U-boot to run on the target
 
 TEMPFILE=$(mktemp -p .)
 
 ###############
 
+function cleanup() {
+	[ "${MOUNTED}" ] && partition_unmount
+	rm -rf ${MOUNT}
+	rm -f ${LOADER}
+	rm -f ${TEMPFILE}
+}
+
+# Clean up in case we're killed or interrupted in a fairly normal way
+trap cleanup EXIT ERR SIGHUP SIGINT SIGQUIT SIGTERM
+
+function nope() {
+	if [ $# -gt 0 ]; then
+		echo "" >&2
+		echo "${PROGNAME}: $@" >&2
+		echo "" >&2
+	fi
+	echo === Poplar recovery image builder ended early ===
+	exit 1
+}
+
 function usage() {
 	echo >&2
 	echo "${PROGNAME}: $@" >&2
 	echo >&2
-	echo "Usage: ${PROGNAME} [-b] <arg>" >&2
+	echo "Usage: ${PROGNAME} <arg>" >&2
 	echo >&2
-	echo "  if -b is supplied, boot record(s) (mbr/ebr) are saved" >&2
 	echo "  for a Linux image, <arg> is a root file system tar archive" >&2
 	echo "  if <arg> is \"android\" an Android image is built" >&2
 	echo >&2
@@ -75,15 +91,10 @@ function usage() {
 function parseargs() {
 	# Make sure a single argument was supplied
 	[ $# -lt 1 ] && usage "no arguments supplied"
-	if [ ${1:0:1} = - ]; then
-		local flag=$1; shift
-
-		[ x$flag = x-b ] || usage "unknown flag '$flag'"
-		PRESERVE_BRS=yes
-	fi
 	[ $# -ne 1 ] && usage "missing argument"
 
 	INPUT_FILES="L_LOADER USB_LOADER"
+	INPUT_FILES="${INPUT_FILES}"
 	if [ "$1" = "android" ]; then
 		IMAGE_TYPE=Android
 		INPUT_FILES="${INPUT_FILES} ANDROID_BOOT_IMAGE"
@@ -113,36 +124,11 @@ function suser_cat() {
 	sudo dd of=${file} status=none || nope "error writing \"${file}\""
 }
 
-function suser_dd() {
-	local dd_args=$*
-
-	sudo dd ${dd_args} status=none || nope "error writing \"$1\""
-}
-
 function suser_append() {
 	local file=$*
 
 	sudo dd of=${file} oflag=append conv=notrunc status=none ||
 	nope "error appending to  \"$file\""
-}
-
-function cleanup() {
-	[ "${LOOP_MOUNTED}" ] && partition_unmount
-	rm -rf ${MOUNT}
-	[ "${LOOP_ATTACHED}" ] && loop_detach
-	rm -f ${LOADER}
-	rm -f ${IMAGE}
-	rm -f ${TEMPFILE}
-}
-
-function nope() {
-	if [ $# -gt 0 ]; then
-		echo "" >&2
-		echo "${PROGNAME}: $@" >&2
-		echo "" >&2
-	fi
-	echo === Poplar recovery image builder ended early ===
-	exit 1
 }
 
 function howmany() {
@@ -163,14 +149,12 @@ function file_bytes() {
 # Make sure we have all our input files, and don't clobber anything
 function file_validate() {
 	local file
+	local i
 
-	# Don't kill anything that already exists.  Tell the user
+	# Don't kill anything that already exists; just say it .
 	# that they must be removed instead.
-	for i in MOUNT LOADER IMAGE USB_IMG; do
-		file=$(eval echo \${$i})
-		[ -e ${file} ] &&
-		nope "$i file \"$file\" exists it must be removed to continue"
-	done
+	[ -e ${LOADER} ] &&
+	nope "\"$LOADER\" exists it must be removed to continue"
 
 	# Make sure all the input files we need *do* exist and are readable
 	for i in ${INPUT_FILES} ; do
@@ -207,31 +191,6 @@ function fstype_mkfs() {
 	esac
 }
 
-function loop_init() {
-	LOOP=$(sudo losetup -f) || nope "unable to find a loop device"
-}
-
-function loop_attach() {
-	local offset=$1
-	local size=$2
-	local file=$3
-
-	# Convert to bytes; that's the unit "losetup" wants.  Check
-	# for 0 here to avoid non-zero exit status for "expr".
-	[ ${offset} -ne 0 ] && offset=$(expr ${offset} \* ${SECTOR_BYTES})
-	[ ${size} -gt 0 ] || nope "loop device size must be non-zero"
-	size=$(expr ${size} \* ${SECTOR_BYTES})
-	sudo losetup ${LOOP} ${file} --offset=${offset} --sizelimit=${size} ||
-	nope "unable to set up loop device ${LOOP} on image file ${file}"
-	LOOP_ATTACHED=yes
-}
-
-function loop_detach() {
-	sudo losetup -d ${LOOP} || nope "failed to detach ${LOOP}"
-	sudo rm -f ${LOOP}p?    # Linux doesn't remove partitions we created
-	unset LOOP_ATTACHED
-}
-
 # Certain partitions are special, and for those we record their number
 function map_description() {
 	local part_number=$1
@@ -259,24 +218,23 @@ function partition_define() {
 	local description=$3
 	local part_offset=${DISK_OFFSET}	# might change, below
 	local part_number=$(expr ${PART_COUNT} + 1)
-	local need_boot_record	# By default, no
+	local part_type
 	local remaining
 
-	[ ${part_size} -ne 0 ] || nope "partition size must be non-zero"
-
-	[ ${EMMC_SIZE} -gt ${DISK_OFFSET} ] || nope "disk space exhausted"
-
-	remaining=$(expr ${EMMC_SIZE} - ${DISK_OFFSET})
+	[ ${part_size} -eq 0 ] && nope "partition size must be non-zero"
 
 	# The first partition is preceded by a 1-sector MBR.  The fourth
-	# partition is extended (and accounted for silently below).  All
-	# others are preceded by a 1-sector EBR.  In other words, all
-	# partitions but 2 and 3 require a sector to hold a boot record.
-	if [ ${part_number} -ne 2 -a ${part_number} -ne 3 ]; then
-		[ ${remaining} -gt 1 ] || nope "disk space exhausted (extended)"
-		remaining=$(expr ${remaining} - 1)
-		need_boot_record=yes
+	# partition is extended, and we associate the EBR in its
+	# first block with the first logical partition contained
+	# within it.  Logical partitions are preceded by a 1-sector
+	# EBR.  In other words, we require an initial sector for all
+	# partitions but 2, 3, and 4 to hold a boot record.
+	if [ ${part_number} -eq 1 -o ${part_number} -gt 4 ]; then
+		part_offset=$(expr ${part_offset} + 1)
 	fi
+	[ ${EMMC_SIZE} -gt ${part_offset} ] || nope "disk space exhausted"
+	remaining=$(expr ${EMMC_SIZE} - ${part_offset})
+
 	# A non-positive size (-1) means use the rest of the disk
 	if [ ${part_size} -le 0 ]; then
 		part_size=${remaining}
@@ -284,38 +242,50 @@ function partition_define() {
 	[ ${part_size} -gt ${remaining} ] &&
 	nope "partition too large (${part_size} > ${remaining})"
 
-	# At this point we assume the partition is OK.  Set the
-	# partition type, and leave room for a boot record if needed
-	if [ ${part_number} -lt 4 ]; then
-		PART_TYPE[${part_number}]=primary
-	else
-		if [ ${part_number} -eq 4 ]; then
-			# Fourth partition is extended.  Silently
-			# define it to fill what's left of the disk,
-			# and then bump the partition number.
-			PART_OFFSET[4]=${part_offset}
-			PART_SIZE[4]=$(expr ${EMMC_SIZE} - ${part_offset})
-			PART_TYPE[4]=extended
-			PART_FSTYPE[4]=none
-
-			part_number=5;
-		fi
-		# The rest are logical partitions, preceded by an EBR
-		PART_TYPE[${part_number}]=logical
-	fi
-
-	# Reserve space for the MBR or EBR if necessary
-	[ "${need_boot_record}" ] && part_offset=$(expr ${part_offset} + 1)
-
-	# Record the partition's offset and size (and final sector)
+	case ${description} in
+	/)			PART_ROOT=${part_number}
+				PART_TYPE[${PART_ROOT}]=0x83
+				PART_FSTYPE[${PART_ROOT}]=ext4
+				;;
+	/boot)			PART_BOOT=${part_number}
+				PART_TYPE[${PART_BOOT}]=0xef
+				PART_FSTYPE[${PART_BOOT}]=vfat
+				;;
+	loader)			[ ${part_number} -eq 1 ] ||
+				nope "only partition 1 can be extended"
+				PART_TYPE[1]=0x83	###
+				PART_FSTYPE[1]=none
+				;;
+	android_boot)		PART_ANDROID_BOOT=${part_number}
+				PART_TYPE[${PART_ANDROID_BOOT}]=0x83	###
+				PART_FSTYPE[${PART_ANDROID_BOOT}]=none
+				;;
+	android_system)		PART_ANDROID_SYSTEM=${part_number}
+				PART_TYPE[${PART_ANDROID_SYSTEM}]=0x83
+				PART_FSTYPE[${PART_ANDROID_SYSTEM}]=ext4
+				;;
+	android_cache)		PART_ANDROID_CACHE=${part_number}
+				PART_TYPE[${PART_ANDROID_CACHE}]=0x83
+				PART_FSTYPE[${PART_ANDROID_CACHE}]=ext4
+				;;
+	android_user_data)	PART_ANDROID_USER_DATA=${part_number}
+				PART_TYPE[${PART_ANDROID_USER_DATA}]=0x83
+				PART_FSTYPE[${PART_ANDROID_USER_DATA}]=ext4
+				;;
+	extended)		[ ${part_number} -eq 4 ] ||
+				nope "only partition 4 can be extended"
+				PART_TYPE[4]=0x0f
+				PART_FSTYPE[4]=none
+				;;
+	esac;
 	PART_OFFSET[${part_number}]=${part_offset}
 	PART_SIZE[${part_number}]=${part_size}
-	PART_FSTYPE[${part_number}]=${part_fstype}
 	DESCRIPTION[${part_number}]=${description}
-	map_description ${part_number} ${description}
 
-	# Consume the partition on the disk
-	DISK_OFFSET=$(expr ${part_offset} + ${part_size})
+	# Consume the partition on the disk (except for extended)
+	if [ ${part_number} -ne 4 ]; then
+		DISK_OFFSET=$(expr ${part_offset} + ${part_size})
+	fi
 	PART_COUNT=${part_number}
 }
 
@@ -372,11 +342,7 @@ function partition_show() {
 	local i
 	local ebr_offset
 
-	echo -n === Using the following disk layout
-	[ "${PRESERVE_BRS}" = yes ] &&
-		echo -n " (MBR and EBRs will be preserved)"
-	echo " ==="
-	echo
+	echo === Using the following disk layout ===
 
 	printf "# %8s %8s %8s %7s %s\n" Start Size Type "FS Type" "Description"
 	# The "\055" is just a (leading) dash character (-)
@@ -390,79 +356,73 @@ function partition_show() {
 		printf "%1u %8u %8u %8s" $i \
 			${PART_OFFSET[$i]} ${PART_SIZE[$i]} ${PART_TYPE[$i]}
 		# No FS type or description for the extended partition
-		[ $i -ne 4 ] &&
+		[ $i -ne 444 ] &&
 			printf " %7s %s" ${PART_FSTYPE[$i]} ${DESCRIPTION[$i]}
 		echo
 	done
 	echo "Total EMMC size is ${EMMC_SIZE} ${SECTOR_BYTES}-byte sectors"
 }
 
-function partition_mkfs() {
+function partition_mount() {
 	local part_number=$1
+	local part_name="${RECOVERY}/partition${part_number}"
+	local bytes=$(expr ${PART_SIZE[${part_number}]} \* ${SECTOR_BYTES})
 	local mkfs_command=$(fstype_mkfs ${PART_FSTYPE[${part_number}]})
 
-	sudo ${mkfs_command} ${LOOP} ||
-	nope "unable to mkfs partition ${part_number}"
-}
+	# The file system will be backed by an image file
+	trunc_file ${part_name} ${bytes}
 
-function partition_mount() {
-	sudo mount ${LOOP} ${MOUNT} || nope "unable to mount partition"
-	LOOP_MOUNTED=yes
+	${mkfs_command} ${part_name} ||
+	nope "unable to mkfs partition on partition ${part_number}"
+
+	mkdir -p ${MOUNT} || nope "unable to create mount point"
+	sudo mount ${part_name} ${MOUNT} || nope "unable to mount partition"
+	MOUNTED=yes
 }
 
 function partition_unmount() {
-	sudo umount ${LOOP} || nope "unable to unmount partition"
-	unset LOOP_MOUNTED
+	sudo umount ${MOUNT} || nope "unable to unmount partition"
+	unset MOUNTED
 }
 
-# Ask the user to verify whether to continue, for safety
-function disk_init() {
-	echo
-	echo "NOTE: ${LOOP} (backed by image file \"${IMAGE}\") will be"
-	echo "      partitioned (i.e., OVERWRITTEN)!"
-	echo
-	echo "ARE YOU SURE YOU WANT TO OVERWRITE \"${LOOP}\"?"
-	echo
-	echo -n "Please type \"yes\" to proceed: "
-	read -i no x
-	[ "${x}" = "yes" ] || nope "aborted by user"
-	echo
+function trunc_file() {
+	local name=$1
+	local bytes=$2
+
+	# First discard any previous content
+	truncate -s 0 ${name} || nope "unable to truncate file \"${name}\""
+	# Now set it to the specified size
+	truncate -s ${bytes} ${name} ||
+	nope "unable to extend \"${name}\" to ${bytes} bytes"
 }
 
 function disk_partition() {
 	local i
-	local end
-	local fstype
 
-	echo === creating partitioned disk image ===
+	echo === creating partitioned disk MBR and EBRs ===
 
-	# Create an empty image file the same size as our target eMMC
-	rm -f ${IMAGE} || echo "unable to remove image file \"${IMAGE}\""
-	truncate -s $(expr ${EMMC_SIZE} \* ${SECTOR_BYTES}) ${IMAGE} ||
-	nope "unable to create empty image file \"${IMAGE}\""
-	loop_attach 0 ${EMMC_SIZE} ${IMAGE}
+	# Start by setting the temp file to be the size of the whole EMMC
+	trunc_file ${TEMPFILE} $(expr ${EMMC_SIZE} \* ${SECTOR_BYTES})
 
-	# Partition our disk image.
-	# Note: Do *not* use --script to "parted"; it caused problems...
-	{								\
-		echo mklabel msdos;					\
-		echo unit s;						\
-		for i in $(seq 1 ${PART_COUNT}); do			\
-			end=$(expr ${PART_OFFSET[$i]} + ${PART_SIZE[$i]} - 1); \
-			fstype=$(fstype_parted ${PART_FSTYPE[$i]});	\
-			echo -n "mkpart ${PART_TYPE[$i]} ${fstype} ";	\
-			echo		"${PART_OFFSET[$i]} ${end}";	\
-		done;							\
-		[ "${PART_BOOT}" ] && echo "set ${PART_BOOT} boot on";	\
-		echo quit;						\
-	} | sudo parted ${LOOP} || nope "failed to partition image"
-}
-
-function disk_finish() {
-	loop_detach
+	# Now partition the temp_file as an image.
+	{
+		echo "label: dos"
+		echo "label-id: 0x78f9d0f7"
+		for i in $(seq 1 ${PART_COUNT}); do
+			echo -n "$i:"
+			echo -n " start=${PART_OFFSET[$i]}"
+			echo -n " size=${PART_SIZE[$i]}"
+			echo -n " type=${PART_TYPE[$i]}"
+			[ $i -eq ${PART_BOOT=${part_number}} ] &&
+				echo -n " bootable"
+			echo ""
+		done
+		echo "write"
+	} | sfdisk --quiet --no-reread --no-tell-kernel ${TEMPFILE}
 }
 
 function fstab_init() {
+	sudo mkdir -p ${MOUNT}/etc
 	echo "# /etc/fstab: static file system information." |
 	suser_cat ${MOUNT}/etc/fstab
 }
@@ -472,19 +432,18 @@ function fstab_add() {
 	local mount_point
 	local fstype
 
-	[ ${part_number} -eq 1 ] && return	# Skip the loader partition
-	[ ${part_number} -eq 4 ] && return	# Skip the extended partition
+	# Skip the loader and extended partitions
+	[ ${part_number} -eq 1 -o ${part_number} -eq 4 ] && return
 
 	mount_point=${DESCRIPTION[${part_number}]}
 	fstype=${PART_FSTYPE[${part_number}]}
 
 	# Make sure the mount point exists in the target environment
-	sudo mkdir -p ${MOUNT}${mount_point} ||
+	sudo mkdir -p ${MOUNT}/${mount_point} ||
 	nope "failed to create mount point for partition ${part_number}"
 
 	printf "${EMMC_DEV}p%u\t%s\t%s\t%s\n" ${part_number} ${mount_point} \
-			${fstype} defaults |
-	suser_append ${MOUNT}/etc/fstab
+			${fstype} defaults | suser_append ${MOUNT}/etc/fstab
 }
 
 # Create the loader file.  It is always in partition 1.
@@ -497,66 +456,52 @@ function fstab_add() {
 # "l-loader" isn't too large for the first partition; it's OK if it's smaller.
 function loader_create() {
 	dd if=${L_LOADER} of=${LOADER} status=none \
-		bs=${SECTOR_BYTES} skip=1 count=${PART_SIZE[1]} ||
-	nope "failed to create loader"
+		bs=${SECTOR_BYTES} skip=1 || nope "failed to create loader"
 }
 
 function populate_begin() {
 	local part_number=$1
-	local offset=${PART_OFFSET[${part_number}]}
-	local size=${PART_SIZE[${part_number}]}
 	local fstype=${PART_FSTYPE[${part_number}]}
 
-	loop_attach ${offset} ${size} ${IMAGE}
-	[ "${fstype}" == none ] && return
+	[ "${fstype}" == none ] && nope "no need for populate_begin"
 
-	partition_mkfs ${part_number}
-	partition_mount
+	# Extract the root file system tar archive.  The unpack function
+	# allows several compressed formats to be used.  Archives from
+	# Linaro prefix paths with "binary"; strip that off if it's present.
+	partition_mount ${part_number}
 }
 
 function populate_end() {
 	local part_number=$1
 	local fstype=${PART_FSTYPE[${part_number}]}
+	local part_name="${RECOVERY}/partition${part_number}"
 
-	[ "${fstype}" != none ] && partition_unmount
-	loop_detach
+	[ "${fstype}" == none ] && nope "no need for populate_end"
+
+	partition_unmount
 }
 
 # Populate a partition using "raw" data from a file
 function populate_image() {
 	local part_number=$1
 	local source_image=$2
-
-	populate_begin ${part_number}
+	local part_name="${RECOVERY}/partition${part_number}"
 
 	# NOTE:  Partition space beyond the source image is *not* zeroed.
 	# We may wish to reconsider this at some point.
-	suser_dd if=${source_image} of=${LOOP} bs=${SECTOR_BYTES}
-
-	populate_end ${part_number}
+	dd status=none if=${source_image} of=${part_name} bs=${SECTOR_BYTES} ||
+	nope "failed to populate image for partition ${part_number}"
 }
 
 # Populate a partition using an Android sparse file system image
 function populate_simage() {
 	local part_number=$1
 	local source_image=$2
+	local part_name="${RECOVERY}/partition${part_number}"
 
-	# Unfortunately simg2img reported lseek64 problems when
-	# using a loop device as the output file, so we'll first
-	# create an image file, and then copy that over.
-	simg2img ${source_image} ${TEMPFILE} ||
+	# Expand the sparse image.
+	simg2img ${source_image} ${part_name} ||
 	nope "unable to expand ${source_image}"
-
-	populate_begin ${part_number}
-
-	# NOTE:  Partition space beyond the expanded source image is
-	# *not* zeroed.  We may wish to reconsider this at some point.
-	suser_dd if=${TEMPFILE} of=${LOOP} bs=${SECTOR_BYTES}
-
-	populate_end ${part_number}
-
-	# Free up the space we consumed
-	truncate -s 0 ${TEMPFILE}
 }
 
 # Fill the loader partition.  Always partition 1.
@@ -565,6 +510,7 @@ function populate_loader() {
 
 	# Just image copy the loader file we already created.
 	echo "- loader"
+	loader_create
 	populate_image ${part_number} ${LOADER}
 }
 
@@ -589,9 +535,6 @@ function populate_root() {
 
 	populate_begin ${part_number}
 
-	# Extract the root file system tar archive.  The unpack function
-	# allows several compressed formats to be used.  Archives from
-	# Linaro prefix paths with "binary"; strip that off if it's present.
 	unpack ${ROOT_FS_ARCHIVE} |
 	sudo tar -C ${MOUNT} -x --transform='s/^binary/./' -f - ||
 	nope "failed to populate root"
@@ -614,6 +557,7 @@ function kernel_args() {
 	echo -n " rootwait"
 	echo -n " rw"
 	echo -n " earlycon"
+	echo -n " mmz=ddr,0,0,60M"	# Currently required for SDK kernels
 	echo
 }
 
@@ -637,22 +581,23 @@ function populate_boot() {
 	populate_begin ${part_number}
 
 	# Save a copy of our loader partition into a file in /boot
-	cat ${LOADER} | suser_cat ${MOUNT}/${LOADER}
+	sudo cp ${LOADER} ${MOUNT}/$(basename ${LOADER})
 
-	# Now copy in the kernel image, DTB, and extlinux directories
-	sudo cp ${KERNEL_IMAGE} ${MOUNT} ||
-	nope "failed to save kernel to boot partition"
-	sudo cp ${DEVICE_TREE_BINARY} ${MOUNT} ||
-	nope "failed to save DTB to boot partition"
-	if [ "${INIT_RAMDISK}" ]; then
-		sudo cp ${INIT_RAMDISK} ${MOUNT} ||
-		nope "failed to save ${INIT_RAMDISK} to boot partition"
+	if [ "${PART_ROOT}" ]; then
+		# Now copy in the kernel image, DTB, and extlinux directories
+		sudo cp ${KERNEL_IMAGE} ${MOUNT} ||
+		nope "failed to save kernel to boot partition"
+		sudo cp ${DEVICE_TREE_BINARY} ${MOUNT} ||
+		nope "failed to save DTB to boot partition"
+		if [ "${INIT_RAMDISK}" ]; then
+			cp ${INIT_RAMDISK} ${MOUNT} ||
+			nope "failed to save ${INIT_RAMDISK} to boot partition"
+		fi
+		# Set up the extlinux.conf file
+		sudo mkdir -p ${MOUNT}/extlinux ||
+		nope "failed to save extlinux directory to boot partition"
+		bootscript_create | suser_append ${MOUNT}/extlinux/extlinux.conf
 	fi
-	# sudo cp .../initrd ${MOUNT}	# cpio.gz file
-	# Set up the extlinux.conf file
-	sudo mkdir -p ${MOUNT}/extlinux ||
-	nope "failed to save extlinux directory to boot partition"
-	bootscript_create | suser_cat ${MOUNT}/extlinux/extlinux.conf
 
 	populate_end ${part_number}
 }
@@ -685,48 +630,14 @@ function populate_android_user_data() {
 	populate_simage ${part_number} ${ANDROID_USER_DATA_IMAGE}
 }
 
-# Set up for building our USB image.  It will be formatted to have a
-# single FAT32 partition.
-function image_init() {
-	local mkfs_command=$(fstype_mkfs vfat)
-	local offset=8	# start the partition at offset 4 KB
-
-	# First partition the disk
-	truncate -s $(expr ${USB_SIZE} \* ${SECTOR_BYTES}) ${USB_IMG} ||
-	nope "unable to create empty USB image file \"${USB_IMG}\""
-	loop_attach 0 ${USB_SIZE} ${USB_IMG}
-
-	# Partition our USB image.
-	# Note: Do *not* use --script to "parted"; it caused problems...
-	{								\
-		echo mklabel msdos;					\
-		echo unit s;						\
-		echo mkpart primary fat32 ${offset} -1;			\
-		echo quit;						\
-	} | sudo parted ${LOOP} || nope "failed to partition USB image"
-	loop_detach
-
-	# Set up loop device on our sole partition, create a FAT32
-	# file system, and mount it
-	loop_attach ${offset} $(expr ${USB_SIZE} - ${offset}) ${USB_IMG}
-
-	sudo ${mkfs_command} ${LOOP} || nope "unable to mkfs USB partition"
-	partition_mount
-}
-
-function image_finish() {
-	partition_unmount
-	loop_detach
-}
-
 function installer_update() {
-	echo "$@" | suser_append ${CURRENT_SCRIPT}
+	echo "$@" >> ${CURRENT_SCRIPT}
 }
 
 function installer_compile() {
 	local description="$@"
 
-	sudo mkimage -T script -A arm64 -C none -n "${description}" \
+	mkimage -T script -A arm64 -C none -n "${description}" \
 		-d ${CURRENT_SCRIPT} ${CURRENT_SCRIPT}.scr ||
 	nope "failed to compile image for \"${CURRENT_SCRIPT}\""
 }
@@ -735,10 +646,11 @@ function installer_init() {
 	echo
 	echo === generating installation files ===
 
-	CURRENT_SCRIPT=${MOUNT}/${INSTALL_SCRIPT}
-	sudo cp /dev/null ${CURRENT_SCRIPT}
+	mkdir -p ${RECOVERY} || nope "unable to create \"${RECOVERY}\""
+	CURRENT_SCRIPT=${RECOVERY}/${INSTALL_SCRIPT}
+	cp /dev/null ${CURRENT_SCRIPT}
 
-	installer_update "# Poplar USB flash drive ${IMAGE_TYPE} recovery"
+	installer_update "# Poplar ${IMAGE_TYPE} recovery U-Boot script"
 	installer_update "# Created $(date)"
 	installer_update ""
 	if [ "${IMAGE_TYPE}" = Linux ]; then
@@ -746,43 +658,41 @@ function installer_init() {
 		installer_update "#    ${ROOT_FS_ARCHIVE}"
 		installer_update ""
 	fi
-	installer_update "usb start"
-	installer_update ""
 }
 
 function installer_init_sub_script() {
-	local sub_script="${INSTALL_SCRIPT}-$1"; shift
+	local sub=$1; shift
 	local description="$@"
+	local new_script=${RECOVERY}/${INSTALL_SCRIPT}-${sub}
 
 	# Add commands to the top-level script to source the one we
 	# will be created.  It will be compiled into a binary file
 	# with the extension ".scr" when we're done creating it
 	installer_update "# ${description}"
-	installer_update "fatload usb 0:1 ${SUB_ADDR} ${sub_script}.scr"
+	installer_update "tftp ${SUB_ADDR} ${new_script}.scr"
 	installer_update "source ${SUB_ADDR}"
 	installer_update ""
 
 	# Switch to the sub-script file and give it a short header
-	CURRENT_SCRIPT=${MOUNT}/${sub_script}
-	sudo cp /dev/null ${CURRENT_SCRIPT}
+	CURRENT_SCRIPT=${new_script}
+	cp /dev/null ${CURRENT_SCRIPT}
 	installer_update "# ${description}"
 	installer_update ""
 }
 
 function installer_add_file() {
 	local filename=$1;
-	local offset=$(printf "0x%08x" $2)
-	local filepath=${MOUNT}/${filename};
-	local bytes=$(file_bytes ${filepath});
+	local hex_disk_offset=$(printf "0x%08x" $2)
+	local bytes=$(file_bytes ${filename});
 	local hex_bytes=$(printf "0x%08x" ${bytes})
 	local size=$(howmany ${bytes} ${SECTOR_BYTES})
 	local hex_size=$(printf "0x%08x" ${size})
 
-	sudo gzip ${filepath}
+	gzip ${filename}
 
-	installer_update "fatload usb 0:1 ${IN_ADDR} ${filename}.gz"
+	installer_update "tftp ${IN_ADDR} ${filename}.gz"
 	installer_update "unzip ${IN_ADDR} ${OUT_ADDR} ${hex_bytes}"
-	installer_update "mmc write ${OUT_ADDR} ${offset} ${hex_size}"
+	installer_update "mmc write ${OUT_ADDR} ${hex_disk_offset} ${hex_size}"
 	installer_update "echo"
 	installer_update ""
 }
@@ -792,12 +702,12 @@ function installer_finish_sub_script() {
 	# back to the top-level sript.
 	installer_compile $(basename ${CURRENT_SCRIPT})
 
-	CURRENT_SCRIPT=${MOUNT}/${INSTALL_SCRIPT}
+	CURRENT_SCRIPT=${RECOVERY}/${INSTALL_SCRIPT}
 }
 
 function installer_finish() {
 	installer_update "echo ============ INSTALLATION IS DONE ============="
-	installer_update "echo (Please remove USB drive and reset your board)"
+	installer_update "echo (Please reset your board)"
 
 	echo
 	echo === building installer ===
@@ -807,25 +717,35 @@ function installer_finish() {
 }
 
 function save_boot_record() {
-	local filename=$1;
-	local filepath=${MOUNT}/${filename};
-	local offset=$2;	# sectors
+	local part_number=$1;
+	local filename
+	local offset
 
-	suser_dd if=${IMAGE} of=${filepath} bs=${SECTOR_BYTES} \
+	if [ ${part_number} -eq 0 ]; then
+		filename=${RECOVERY}/mbr.bin
+		offset=0
+	elif [ ${part_number} -gt 4 ]; then
+		filename=${RECOVERY}/ebr${part_number}.bin
+		offset=$(expr ${PART_OFFSET[$part_number]} - 1)
+	else
+		nope "bad boot record number ${part_number}"
+	fi
+
+	dd status=none if=${TEMPFILE} of=${filename} bs=${SECTOR_BYTES} \
 			skip=${offset} count=1
-	[ "${PRESERVE_BRS}" = yes ] && cp ${filepath} ${filename}
+
 	installer_add_file ${filename} ${offset}
 }
 
 function save_layout() {
 	local i
 
-	installer_init_sub_script layout "# Partition layout (MBR and EBRs)"
+	installer_init_sub_script layout "Partition layout (MBR and EBRs)"
 
-	save_boot_record mbr.bin 0
+	save_boot_record 0	# MBR
 	# Partitions 5 and above require an Extended Boot Record
 	for i in $(seq 5 ${PART_COUNT}); do
-		save_boot_record ebr$i.bin $(expr ${PART_OFFSET[$i]} - 1)
+		save_boot_record $i
 	done
 
 	installer_finish_sub_script
@@ -836,28 +756,34 @@ function save_layout() {
 # plan here for the worst case (though it's unlikely because we
 # compress the chunks).
 function save_partition() {
-	local part_number=$1;
-	local part_name="partition${part_number}";
-	local offset=${PART_OFFSET[${part_number}]}
+	local part_number=$1
+	local part_name=${RECOVERY}/partition${part_number}
+	local part_offset=${PART_OFFSET[${part_number}]}
+	local offset=0
 	local size=${PART_SIZE[${part_number}]}
 	local chunk_size=${CHUNK_SIZE}
 	local count=1;
 	local limit=$(howmany ${size} ${chunk_size})
-	local desc="# Partition ${part_number} (${DESCRIPTION[${part_number}]})"
+	local desc="Partition ${part_number} (${DESCRIPTION[${part_number}]})"
 
-	installer_init_sub_script ${part_name} "${desc}"
+	if [ ! -e "${part_name}" ]; then
+		echo "Skipping partition ${part_number}"
+		return
+	fi
+
+	installer_init_sub_script $(basename ${part_name}) "${desc}"
 
 	while true; do
 		local filename=${part_name}.${count}-of-${limit};
-		local filepath=${MOUNT}/${filename}
+		local disk_offset=$(expr ${part_offset} + ${offset})
 
 		if [ ${size} -lt ${chunk_size} ]; then
 			chunk_size=${size}
 		fi
 		echo "- ${filename} (${chunk_size} sectors)"
-		suser_dd if=${IMAGE} of=${filepath} bs=${SECTOR_BYTES} \
-				skip=${offset} count=${chunk_size}
-		installer_add_file ${filename} ${offset}
+		dd status=none if=${part_name} of=${filename} \
+			bs=${SECTOR_BYTES} skip=${offset} count=${chunk_size}
+		installer_add_file ${filename} ${disk_offset}
 
 		count=$(expr ${count} + 1)
 		offset=$(expr ${offset} + ${chunk_size})
@@ -866,12 +792,12 @@ function save_partition() {
 	done
 
 	installer_finish_sub_script
+
+	# done with the original file, so delete it
+	rm -f ${part_name}
 }
 
 ############################
-
-# Clean up in case we're killed or interrupted in a fairly normal way
-trap cleanup EXIT ERR SIGHUP SIGINT SIGQUIT SIGTERM
 
 parseargs "$@"
 
@@ -882,45 +808,44 @@ echo
 file_validate
 
 partition_init
-
+partition_define 8191   none loader
+partition_define 262144 vfat /boot
 if [ "${IMAGE_TYPE}" = Android ]; then
-	partition_define 8191     none loader
-	partition_define 81920    none android_boot
-	partition_define 2097151  ext4 android_system
-	partition_define 2097151  ext4 android_cache
-	partition_define 10985472 ext4 android_user_data
-	# The rest is unused (3737598 sectors)
+	partition_define 81919  none android_boot
+	partition_define -1     none extended
+	partition_define  2097151 ext4 android_system
+	partition_define  2097151 ext4 android_cache
+	partition_define 10723328 ext4 android_user_data
 else
-	partition_define 8191    none loader
-	partition_define 262144  vfat /boot
-	partition_define 3923967 ext4 /
-	# We'll not use the rest (11075585 sectors) for now
-	# partition_define 5537791 ext4 /a
+	partition_define 3999743 ext4 /
+	# We'll not use the rest (10999809 sectors) for now
+	# partition_define -1  none extended
+	# partition_define 5500927 ext4 /a
 	# partition_define -1      ext4 /b
 fi
-
 partition_validate
-
 partition_show
 
-# To go any further we need superuser privilege
 suser
 
-loop_init
-
-disk_init
+# Ready to start creating
 disk_partition
-disk_finish
+installer_init
+save_layout
 
 echo === populating loader partition and file systems in image ===
 
-mkdir -p ${MOUNT} || nope "unable to create mount point \"${MOUNT}\""
-
 # Create the loader file and save it to its partition
-loader_create
 populate_loader
 
-# Now populate the rest of the paritions
+# Save a copy of  "fastboot.bin" so it can be placed on a USB stick,
+# allowing it to be bootable for de-bricking.
+cp ${USB_LOADER} ${RECOVERY}/fastboot.bin
+
+# Populate the boot file system and save it to its partition
+populate_boot ${PART_BOOT}
+
+# Now populate the rest of the partitions; we save them below
 if [ "${IMAGE_TYPE}" = Android ]; then
 	[ "${PART_ANDROID_BOOT}" ] &&
 		populate_android_boot ${PART_ANDROID_BOOT}
@@ -932,23 +857,10 @@ if [ "${IMAGE_TYPE}" = Android ]; then
 		populate_android_user_data ${PART_ANDROID_USER_DATA}
 else
 	[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
-	[ "${PART_BOOT}" ] && populate_boot ${PART_BOOT}
 	# We won't populate the other file systems for now
 fi
 
-# Set up for building our USB image
-image_init
-
-# Initialize the installer script
-installer_init
-
-# First, we need "fastboot.bin" on the USB stick for it to be bootable.
-sudo cp ${USB_LOADER} ${MOUNT}/fastboot.bin
-
-# Start with the partitioning metadata--MBR and all EBRs
-save_layout
-
-# Now save off our partition into files used for installation.
+# Save off our partition into files used for installation.
 for i in $(seq 1 ${PART_COUNT}); do
 	# Partition 4 is extended, and is comprised of logical partitions
 	[ $i -ne 4 ] && save_partition $i
@@ -956,9 +868,8 @@ done
 
 installer_finish
 
-# for building our USB image
-image_finish
-
-echo ====== Poplar recovery image builder done! ======
+echo ====== Poplar recovery builder is done! ======
+echo ""
+echo ====== Recovery files can be found in \"${RECOVERY}\" ======
 
 exit 0
