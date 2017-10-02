@@ -587,7 +587,9 @@ function populate_boot() {
 		# Now copy in the kernel image, DTB, and extlinux directories
 		sudo cp ${KERNEL_IMAGE} ${MOUNT} ||
 		nope "failed to save kernel to boot partition"
-		sudo cp ${DEVICE_TREE_BINARY} ${MOUNT} ||
+		sudo mkdir -p ${MOUNT}/hisilicon ||
+		nope "failed to create hisilicon DTB directory"
+		sudo cp ${DEVICE_TREE_BINARY} ${MOUNT}/hisilicon ||
 		nope "failed to save DTB to boot partition"
 		if [ "${INIT_RAMDISK}" ]; then
 			cp ${INIT_RAMDISK} ${MOUNT} ||
