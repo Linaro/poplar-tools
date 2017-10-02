@@ -13,12 +13,13 @@ package a USB recovery device. These instructions assume you are using Linux bas
 
 ### Step 1: Make sure you have needed tools installed
 
-This list may well grow, but at least you'll need the following:
+  This list may well grow, but at least you'll need the following:
 
 ```shell
       sudo apt-get update
       sudo apt-get upgrade
       sudo apt-get install device-tree-compiler libssl-dev u-boot-tools
+      sudo apt-get install screen simg2img
 ```
 
 ### Step 2: Set up the working directory.
@@ -30,19 +31,18 @@ This list may well grow, but at least you'll need the following:
 ```
 
 ### Step 3: Download a root file system image to use.
-  These are available from Linaro.  An example is
-  "linaro-stretch-developer-20170511-60.tar.gz", which is (or was)
-  available here:
-    http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/
-  Note that these images change regularly, so the image you get will
-  be different from this.  If you download this file by some means
-  other than "wget" shown below, please ensure it gets place in the
-  "recovery" directory created here.
+  These are available from Linaro, under here:
+    http://snapshots.linaro.org/debian/images/stretch/developer-arm64/
+  These images change regularly, and the latest version is always
+  available under a folder named "latest".  For the purposes of this
+  document we assume that build 80 is used.  If you download this
+  file by some means other than "wget" shown below, please ensure it
+  gets place in the "recovery" directory created here.
 
 ```shell
     mkdir ${TOP}/recovery
     wget -P ${TOP}/recovery \
-        http://snapshots.linaro.org/debian/images/stretch/developer-arm64/latest/linaro-stretch-developer-20170511-60.tar.gz
+        http://snapshots.linaro.org/debian/images/stretch/developer-arm64/80/linaro-stretch-developer-20170914-80.tar.gz
 ```
 
 ### Step 4: Get the source code.
@@ -58,23 +58,46 @@ This list may well grow, but at least you'll need the following:
   git clone https://github.com/linaro/poplar-linux.git -b latest
 ```
 
-### Step 6: Prepare for building.
+### Step 5: Set up toolchains for building
   Almost everything uses aarch64, but one item (l-loader.bin) must
-  be built for 32-bit ARM.  Set up environment variables to
-  represent the two cross-compiler toolchains you'll be using.
+  be built for 32-bit ARM.  In addition, UEFI (which we aren't using
+  now but will use soon) requires the compiler to be no newer than
+  GCC 4.9.  Finally, the newest versions of GCC warn and in some
+  case treat as errors some things that have not been fixed in code
+  that's not Poplar-specific in the Linux 4.4 kernel code.
+  The easiest way to avoid problems due to these requirements is to
+  just use the 4.9 version of GCC for 64-bit ARM, and a stable but
+  new version of GCC for 32-bit ARM.  If you already have installed
+  cross-compilers, they may work for you; but the instructions
+  assume you are installing the following toolchains.
 
+  Download a 64-bit toolchain using GCC 4.9 from Linaro, and extract
+  it under the /opt directory on your build system:
 ```shell
-    CROSS_32=arm-linux-gnueabi-
-    CROSS_64=aarch64-linux-gnu-
+    cd /tmp
+    wget https://releases.linaro.org/components/toolchain/binaries/4.9-2017.01/aarch64-linux-gnu/gcc-linaro-4.9.4-2017.01-x86_64_aarch64-linux-gnu.tar.xz
+    sudo mkdir -p /opt
+    sudo tar -C /opt -xJf /tmp/gcc-linaro-4.9.4-2017.01-x86_64_aarch64-linux-gnu.tar.xz
+    rm /tmp/gcc-linaro-4.9.4-2017.01-x86_64_aarch64-linux-gnu.tar.xz
 ```
 
-  If you don't already have ARM 32- and 64-bit toochains installed,
-  they are available from Linaro.
-    https://releases.linaro.org/components/toolchain/binaries/latest/
-  Install the "aarch64-linux-gnu" and "arm-linux-gnueabi" packages
-  for your system.  (Depending on where you install them, you may
-  need to specify absolute paths for the values of CROSS_32 and
-  CROSS_64, above.)
+  Download a recent 32-bit GCC toolchain from Linaro, and extract it
+  under the /opt directory on your build system:
+```shell
+    cd /tmp
+    wget https://releases.linaro.org/components/toolchain/binaries/7.1-2017.08/arm-linux-gnueabi/gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabi.tar.xz
+    sudo tar -C /opt -xJf /tmp/gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabi.tar.xz
+    rm /tmp/gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabi.tar.xz
+```
+
+  Finally, set some environment variables used to specify the path
+  (and file name prefix) for accessing the 32-bit and 64-bit cross
+  compiler tool chains in the instructions that follow:
+
+```shell
+    CROSS_32=/opt/gcc-linaro-7.1.1-2017.08-x86_64_arm-linux-gnueabi/bin/arm-linux-gnueabi-
+    CROSS_64=/opt/gcc-linaro-4.9.4-2017.01-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
+```
 
 ## Build everything
 
@@ -140,10 +163,10 @@ This list may well grow, but at least you'll need the following:
     #       arch/arm64/boot/Image
     #       arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb
     cd ${TOP}/poplar-linux
-    make distclean
-    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" defconfig
     JOBCOUNT=$(grep ^processor /proc/cpuinfo | wc -w)
-    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" all -j ${JOBCOUNT}
+    make ARCH=arm64 distclean
+    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" defconfig
+    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" all dtbs modules -j ${JOBCOUNT}
 ```
 
 ### Step 5: Gather the required components you built above
@@ -159,22 +182,42 @@ This list may well grow, but at least you'll need the following:
     cp ${TOP}/poplar-linux/arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb .
 ```
 
-### Step 6: Build an image to save to a USB flash drive for Poplar recovery.
+### Step 6: Build image files used for recovery and installation
   You need to supply the root file system image you downloaded
-  earlier (whose name will be different from what's shown below).
+  earlier (whose name may be different from what's shown below).
+  This will also require superuser privilege to complete.
 
 ```shell
-    # This produces one output file, which is written to a USB flash drive:
-    #       usb_recovery.img
+    # This produces a directory "recovery_files".  In that directory,
+    # "fastboot.bin" can be placed on a USB flash drive (formatted
+    # with an MBR with a single FAT32 file system partition) that can
+    # be used to boot a Poplar board in a "bricked" state.  The
+    # remaining files are used in populating the eMMC media with a
+    # bootable Linux system.
+    #       recovery_files/fastboot.bin
+    #       recovery_files/install.scr
+    #       recovery_files/install-*.scr
+    #       recovery_files/partition1-1of1.gz
+    #		...
     bash ./poplar_recovery_builder.sh \
-		    linaro-stretch-developer-20170511-60.tar.gz
+		    linaro-stretch-developer-20170914-80.tar.gz
 ```
 
-## Prepare to replace the contents of a USB flash drive with the output of the build.
+### Step 7: Copy image files to the TFTP home directory
+  The recovery process depends on transferring files to the Poplar
+  board via Ethernet using TFTP.  The "recovery_files" directory
+  must be copied to the root of the TFTP directory.
 
-### Step 1: First you need to identify your USB flash drive.  
-  THIS IS VERY IMPORTANT. This will COMPLETELY ERASE the contents of
-  whatever device you specify here.  So be sure you get it right.
+```shell
+    cd ${TOP}/recovery
+    sudo rm -rf ~tftp/recovery_files
+    sudo cp -a recovery_files ~tftp
+    sudo chown -R tftp.tftp ~tftp/recovery_files
+```
+
+## To allow recovery of a Poplar board in a "bricked" state, prepare a USB flash drive.
+
+### Step 1: Identify your USB flash drive device
 
   Insert the USB flash drive into your host system, and identify
   your USB device:
@@ -182,42 +225,84 @@ This list may well grow, but at least you'll need the following:
 ```shell
 	grep . /sys/class/block/sd?/device/model
 ```
-
   If you recognize the model name as your USB flash device, then
   you know which "sd" device to use.  Here's an example:
 
 ```shell
-	/sys/class/block/sdc/device/model:Patriot Memory
+	/sys/class/block/sdh/device/model:Patriot Memory
 	                 ^^^
 ```
-
   I had a Patriot Memory USB flash drive, and the device name
-  I'll want is "/dev/sdc" (based on "sdc" above).  Record this name:
+  I'll want is "/dev/sdh" (based on "sdh" above).  Record this name:
 
 ```shell
-	USBDISK=/dev/sdc	# Make sure this is *your* device
+	USBDISK=/dev/sdh	# Make sure this is *your* device
 ```
 
-### Step 2: Overwrite the USB drive you have inserted with the built image.
+  The instructions that follow assume your USB flash drive needs to be
+  formatted "from scratch."  Once formatted, all that's required is to
+  copy "fastboot.bin" to the first partition on the drive, and then
+  properly eject the medium before removing the USB drive.
 
-  You will need superuser access.  This is where you write your disk
-  image to the USB flash drive.
+### Step 2: Format the flash drive using MBR partitioning.
+
+  THIS IS VERY IMPORTANT.  The following commands will COMPLETELY
+  ERASE the contents of whatever device you specify here.  So be
+  sure USBDISK defines the flash device you intend to erase.
+
+  You will need superuser access.  First, unmount anything mounted
+  on that device:
 
 ```shell
-    sudo dd if=usb_recovery.img of=${USBDISK}
+    sudo umount ${USBDISK}?
 ```
 
-  Eject the USB flash drive,
+  Next, clobber any existing partitioning information that might be
+  found at the beginning of the device:
 
 ```shell
+    sudo dd if=/dev/zero of=${USBDISK} bs=2M count=1 status=none
+```
+
+  Create a DOS MBR partition table on the USB flash drive with a
+  single partition, and format that partition using FAT32.
+```shell
+    {   echo label:dos
+	echo 1: start=8 size=62496KiB type=0x0c
+	echo write
+    } | sudo sfdisk --label dos ${USBDISK}
+    sudo mkfs.fat -F 32 ${USBDISK}1
+```
+
+### Step 3: Copy "fastboot.bin" to the drive
+
+  Finally, mount that partition and copy "fastboot.bin" into it.
+  Once the partition has been unmounted and the device has been
+  ejected, the USB stick can be removed.
+
+```shell
+    cd ${TOP}/recovery/recovery_files
+    mkdir -p /tmp/usbdisk
+    sudo mount -t vfat ${USBDISK}1 /tmp/usbdisk
+
+    sudo cp fastboot.bin /tmp/usbdisk
+
+    sudo umount /tmp/usbdisk
+    rmdir /tmp/usbdisk
     sudo eject ${USBDISK}
 ```
 
-  Remove the USB flash drive from your host system
+  (For a previously-formatted drive, simply inserting it will cause
+  it be mounted automatically--normally under /media/...  somewhere.)
 
-## Run the recovery on the Poplar board
-  Next you'll put the USB flash drive on the Poplar board to boot
-  from it.
+  Remove the USB flash drive from your host system.
+
+## De-brick a Poplar board in a "bricked" state
+
+  If a Poplar board is in a "bricked" state, it can be booted using
+  the USB flash drive prepared above.
+
+### Step 1: Prepare the Poplar board for power-on
 
 - The Poplar board should be powered off.  You should have a cable
   from the Poplar's micro USB based serial port to your host
@@ -229,6 +314,8 @@ This list may well grow, but at least you'll need the following:
 ```shell
       screen /dev/ttyUSB0 115200
 ```
+
+### Step 2: Insert the USB flash drive on the Poplar board
 
 - There are a total of 4 USB connectors on the Poplar board.  Two
   are USB 2.0 ports, they're stacked on top of each other.  Insert
@@ -245,47 +332,132 @@ This list may well grow, but at least you'll need the following:
   key, perhaps repeatedly, in the serial console window until you
   find the boot process has stopped.
 
+### Step 2: Boot the Poplar board from the USB flash drive
+
 - Power on the Poplar board (while pressing the USB_BOOT button),
-  and interrupt its automated boot with a key press.
+  and interrupt its automated boot with a key press.  This should
+  lead to a "poplar# " prompt.
 
-- Now enter the following commands in the Poplar serial console
+## Re-flash images onto the Poplar board eMMC
 
+  The files required for partitioning and re-flashing the content of
+  eMMC media on the Poplar board were produced earlier, and should
+  not be present in ~tftp/recovery_files.  The Ethernet interface on
+  the Poplar board must be configured, and then an installer script
+  will be downloaded and executed.
+
+### Step 1: Configure the Poplar Ethernet interface
+
+  The following assumes you know your network configuration, and that
+  you have an IP address in that network to use for the Poplar board.
+
+- Inform U-Boot about the network parameters to use.  Use values for
+  the following environment variables that are appropriate for your
+  network.  The IP address for the Poplar board is assigned with
+  "ipaddr"; the netmask for the network is defined by "netmask"; and
+  the IP address of the TFTP server containing the recovery files
+  (probably your development/build machine) is "serverip".
+
+  Enter the following commands in the Poplar serial console to
+  configure the Ethernet interface.
 ```shell
-    usb reset
-    fatload usb 0:1 ${scriptaddr} install.scr
-    source ${scriptaddr}
+    env set ipaddr 192.168.0.2
+    env set netmask 255.255.255.0 
+    env set serverip 192.168.0.1
 ```
 
+- Verify your network connection is operational.
+```shell
+    ping ${serverip}
+```
+
+### Step 1: Run the installer
+
+- Load an install script using TFTP, and run it.
+```shell
+    tftp ${scriptaddr} recovery_files/install.scr
+    source ${scriptaddr}
+```
   It will take about 5-10 minutes to complete writing out the contents
   of the disk.  The result should look a bit like this:
 
 ```shell
     ---------------------------
+    | poplar# source ${scriptaddr}
     | ## Executing script at 32000000
-    | reading mbr.gz
-    | 159 bytes read in 15 ms (9.8 KiB/s)
+    | ETH1: PHY(phyaddr=3, rgmii) link UP: DUPLEX=FULL : SPEED=1000M
+    | Using gmac1 device
+    | TFTP from server 172.22.22.5; our IP address is 172.22.22.154
+    | Filename 'recovery_files/install-layout.scr'.
+    | Load address: 0x7800000
+    | Loading: #
+    |          359.4 KiB/s
+    | done
+    | Bytes transferred = 368 (170 hex)
+    | ## Executing script at 07800000
+    | ETH1: PHY(phyaddr=3, rgmii) link UP: DUPLEX=FULL : SPEED=1000M
+    | Using gmac1 device
+    | TFTP from server 172.22.22.5; our IP address is 172.22.22.154
+    | Filename 'recovery_files/mbr.bin.gz'.
+    | Load address: 0x8000000
+    | Loading: #
+    |          98.6 KiB/s
+    | done
+    | Bytes transferred = 101 (65 hex)
     | Uncompressed size: 512 = 0x200
     |
     | MMC write: dev # 0, block # 0, count 1 ... 1 blocks written: OK
-    |
-    | reading partition1.1-of-1.gz
-    | 223851 bytes read in 32 ms (6.7 KiB/s)
-    | Uncompressed size: 4193792 = 0x3FFE00
-    |
-    | MMC write: dev # 0, block # 1, count 8191 ... 8191 blocks written: OK
     |          . . .
 ```
 
-- When this process completes, remove your USB memory stick from the
-  Poplar board and reset it.  You can reset it in one of three ways:
-  press the reset button; power the board off and on again; or run
-  this command in the serial console window:
-
+- When this process completes, reset your Poplar board.  You can reset it in
+  one of three ways: press the reset button; power the board off and on again;
+  or run this command in the serial console window:
 ```shell
     reset
 ```
 
   At this point, Linux should automatically boot from the eMMC.
 
-You have now booted your Poplar board with open source code that you
-have built yourself.
+  You have now booted your Poplar board with open source code that you
+  have built yourself.
+
+## Additional information about the recovery files
+
+  The following paragraphs provide some more information about the
+  files found in the "recovery_files" directory.
+
+#### fastboot.bin
+  When this file is placed in the first partition of a USB memory
+  stick formatted with a FAT32 file system, that memory stick can
+  be used to boot the Poplar board.  This is useful if the board
+  has become "bricked" and is otherwise unusable.
+   
+#### install, install-layout, install-partition1, install-partitionX
+  These are human-readable versions of installer scripts used by
+  U-Boot.  The top-level installer is "install"; it loads and
+  executes the other install scripts.  Each install script has a
+  corresponding ".scr" file (e.g., "install.scr"), which is the file
+  that U-Boot actually uses.  "install-layout" installs the Master
+  Boot Record and the Extended Boot Records required for partitions
+  5 and above.  "install-partitionX" contains commands to install
+  the contents of just one partition.
+
+  Each "install*.scr" file can be loaded into U-Boot and run.  If
+  the top-level "install.scr" is used, it will execute all the
+  others.  Otherwise, partial installs can be performed by, for
+  example, loading and running "install-layout.scr" to re-write the
+  boot records, or "install-partition2.scr" to re-write only
+  partition 2.
+
+#### mbr.bin.gz, ebr5.bin.gz, ebr6.bin.gz
+  These are the Master Boot Record and Extended Boot Records for
+  partitions 5 and 6.  They are compressed.  They are normally
+  loaded and flashed to eMMC using "install-layout".
+
+#### partition1.1-of-1.gz, partition3.1-of-4.gz, etc.
+  These are files that contain (parts of) the contents of the
+  partitions.  The contents of an entire partition can't fit
+  entirely in memory, so large partitions are broken into pieces.
+  Each piece is compressed.  The install script for the partition
+  takes care of uncompressing each part before writing it to eMMC.

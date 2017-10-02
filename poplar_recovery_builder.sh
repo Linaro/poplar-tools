@@ -253,11 +253,11 @@ function partition_define() {
 				;;
 	loader)			[ ${part_number} -eq 1 ] ||
 				nope "only partition 1 can be extended"
-				PART_TYPE[1]=0x83	###
+				PART_TYPE[1]=0xf0
 				PART_FSTYPE[1]=none
 				;;
 	android_boot)		PART_ANDROID_BOOT=${part_number}
-				PART_TYPE[${PART_ANDROID_BOOT}]=0x83	###
+				PART_TYPE[${PART_ANDROID_BOOT}]=0xda
 				PART_FSTYPE[${PART_ANDROID_BOOT}]=none
 				;;
 	android_system)		PART_ANDROID_SYSTEM=${part_number}
