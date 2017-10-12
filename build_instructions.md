@@ -115,7 +115,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
     make CROSS_COMPILE=${CROSS_64}
 ```
 
-### Step 2: Build ARM Trusted Firmware components.  
+### Step 2: Build ARM Trusted Firmware components.
   The result of this process will be two files "bl1.bin" and
   "fip.bin", which will be incorporated into the image created for
   "l-loader" in the next step. The FIP file packages files "bl2.bin"
@@ -149,7 +149,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
     make CROSS_COMPILE=${CROSS_32}
 ```
 
-### Step 4: Build Linux.  
+### Step 4: Build Linux.
   The result of this process will be two files: "Image" contains the
   kernel image; and "hi3798cv200-poplar.dtb" containing the
   flattened device tree file (device tree binary).  A Linux build is
@@ -310,7 +310,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
   For me, the board console shows up as /dev/ttyUSB0 when the USB
   cable is connected.  The serial port runs at 115200 baud.  I use
   this command to see what's on the console:
-  
+
 ```shell
       screen /dev/ttyUSB0 115200
 ```
@@ -362,7 +362,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
   configure the Ethernet interface.
 ```shell
     env set ipaddr 192.168.0.2
-    env set netmask 255.255.255.0 
+    env set netmask 255.255.255.0
     env set serverip 192.168.0.1
 ```
 
@@ -432,7 +432,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
   stick formatted with a FAT32 file system, that memory stick can
   be used to boot the Poplar board.  This is useful if the board
   has become "bricked" and is otherwise unusable.
-   
+
 #### install, install-layout, install-partition1, install-partitionX
   These are human-readable versions of installer scripts used by
   U-Boot.  The top-level installer is "install"; it loads and
