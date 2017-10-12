@@ -165,7 +165,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
     cd ${TOP}/poplar-linux
     JOBCOUNT=$(grep ^processor /proc/cpuinfo | wc -w)
     make ARCH=arm64 distclean
-    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" defconfig
+    make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" poplar_defconfig
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" all dtbs modules -j ${JOBCOUNT}
 ```
 
