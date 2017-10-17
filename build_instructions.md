@@ -163,7 +163,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
     #       arch/arm64/boot/Image
     #       arch/arm64/boot/dts/hisilicon/hi3798cv200-poplar.dtb
     cd ${TOP}/poplar-linux
-    JOBCOUNT=$(grep ^processor /proc/cpuinfo | wc -w)
+    JOBCOUNT=$(grep ^processor /proc/cpuinfo | wc -l)
     make ARCH=arm64 distclean
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" poplar_defconfig
     make ARCH=arm64 CROSS_COMPILE="${CROSS_64}" all dtbs modules -j ${JOBCOUNT}
