@@ -418,7 +418,7 @@ function disk_partition() {
 			echo ""
 		done
 		echo "write"
-	} | sfdisk --quiet --no-reread --no-tell-kernel ${TEMPFILE}
+	} | sfdisk --quiet --no-reread ${TEMPFILE}
 }
 
 function fstab_init() {
