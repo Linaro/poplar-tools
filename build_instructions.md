@@ -203,6 +203,38 @@ package a USB recovery device. These instructions assume you are using Linux bas
 		    linaro-stretch-developer-20170914-80.tar.gz
 ```
 
+**NOTE**: If you get below error, that means your `mkimage` version is
+too old, e.g. if you using Ubuntu 14.04. Use the one you just built in
+`${TOP}/poplar-u-boot/tools` instead.
+
+```shell
+Invalid CPU Type - valid names are: alpha, arm, x86, ia64, m68k, microblaze, mips, mips64, nios2, powerpc, ppc, s390, sh, sparc, sparc64, blackfin, avr32, nds32, or1k, sandbox
+Usage: mkimage -l image
+          -l ==> list image header information
+       mkimage [-x] -A arch -O os -T type -C comp -a addr -e ep -n name -d data_file[:data_file...] image
+          -A ==> set architecture to 'arch'
+          -O ==> set operating system to 'os'
+          -T ==> set image type to 'type'
+          -C ==> set compression type 'comp'
+          -a ==> set load address to 'addr' (hex)
+          -e ==> set entry point to 'ep' (hex)
+          -n ==> set image name to 'name'
+          -d ==> use image data from 'datafile'
+          -x ==> set XIP (execute in place)
+       mkimage [-D dtc_options] [-f fit-image.its|-F] fit-image
+          -D => set options for device tree compiler
+          -f => input filename for FIT source
+Signing / verified boot not supported (CONFIG_FIT_SIGNATURE undefined)
+       mkimage -V ==> print version information and exit
+```
+
+**NOTE**: It is normal to see below warning during this step.
+
+```shell
+recovery_files/partition3 is not a block special device.
+Proceed anyway? (y,n)
+```
+
 ### Step 7: Copy image files to the TFTP home directory
   The recovery process depends on transferring files to the Poplar
   board via Ethernet using TFTP.  The "recovery_files" directory
