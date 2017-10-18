@@ -342,7 +342,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
 
   The files required for partitioning and re-flashing the content of
   eMMC media on the Poplar board were produced earlier, and should
-  not be present in ~tftp/recovery_files.  The Ethernet interface on
+  now be present in ~tftp/recovery_files.  The Ethernet interface on
   the Poplar board must be configured, and then an installer script
   will be downloaded and executed.
 
