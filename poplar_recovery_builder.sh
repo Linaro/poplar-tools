@@ -54,6 +54,8 @@ INSTALL_SCRIPT=install	# for U-boot to run on the target
 
 TEMPFILE=$(mktemp -p .)
 
+PARTS=all
+
 ###############
 
 function cleanup() {
@@ -80,10 +82,16 @@ function usage() {
 	echo >&2
 	echo "${PROGNAME}: $@" >&2
 	echo >&2
-	echo "Usage: ${PROGNAME} <arg>" >&2
+	echo "Usage: ${PROGNAME} <arg> [all|layout|loader|boot|rootfs]" >&2
 	echo >&2
 	echo "  for a Linux image, <arg> is a root file system tar archive" >&2
 	echo "  if <arg> is \"android\" an Android image is built" >&2
+	echo >&2
+	echo "  all	build all below (default)" >&2
+	echo "  layout	build layout only" >&2
+	echo "  loader	build loader only" >&2
+	echo "  boot	build loader (dependency) and boot only" >&2
+	echo "  rootfs	build rootfs only" >&2
 	echo >&2
 	exit 1
 }
@@ -91,7 +99,6 @@ function usage() {
 function parseargs() {
 	# Make sure a single argument was supplied
 	[ $# -lt 1 ] && usage "no arguments supplied"
-	[ $# -ne 1 ] && usage "missing argument"
 
 	INPUT_FILES="L_LOADER USB_LOADER"
 	INPUT_FILES="${INPUT_FILES}"
@@ -107,6 +114,10 @@ function parseargs() {
 		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
 		INPUT_FILES="${INPUT_FILES} DEVICE_TREE_BINARY"
 		INPUT_FILES="${INPUT_FILES} ROOT_FS_ARCHIVE"
+	fi
+
+	if [ -n "$2" ]; then
+		PARTS=$2
 	fi
 }
 
@@ -807,6 +818,8 @@ echo
 echo ====== Poplar recovery image builder ======
 echo
 
+rm -rf ${RECOVERY}
+
 file_validate
 
 partition_init
@@ -833,33 +846,42 @@ suser
 # Ready to start creating
 disk_partition
 installer_init
-save_layout
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "layout" ] ; then
+	save_layout
+fi
 
 echo === populating loader partition and file systems in image ===
 
 # Create the loader file and save it to its partition
-populate_loader
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "loader" ] || \
+	[ "${PARTS}" = "boot" ] ; then
+	populate_loader
+fi
 
 # Save a copy of  "fastboot.bin" so it can be placed on a USB stick,
 # allowing it to be bootable for de-bricking.
 cp ${USB_LOADER} ${RECOVERY}/fastboot.bin
 
 # Populate the boot file system and save it to its partition
-populate_boot ${PART_BOOT}
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "boot" ] ; then
+	populate_boot ${PART_BOOT}
+fi
 
 # Now populate the rest of the partitions; we save them below
-if [ "${IMAGE_TYPE}" = Android ]; then
-	[ "${PART_ANDROID_BOOT}" ] &&
-		populate_android_boot ${PART_ANDROID_BOOT}
-	[ "${PART_ANDROID_SYSTEM}" ] &&
-		populate_android_system ${PART_ANDROID_SYSTEM}
-	[ "${PART_ANDROID_CACHE}" ] &&
-		populate_android_cache ${PART_ANDROID_CACHE}
-	[ "${PART_ANDROID_USER_DATA}" ] &&
-		populate_android_user_data ${PART_ANDROID_USER_DATA}
-else
-	[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
-	# We won't populate the other file systems for now
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "rootfs" ] ; then
+	if [ "${IMAGE_TYPE}" = Android ]; then
+		[ "${PART_ANDROID_BOOT}" ] &&
+			populate_android_boot ${PART_ANDROID_BOOT}
+		[ "${PART_ANDROID_SYSTEM}" ] &&
+			populate_android_system ${PART_ANDROID_SYSTEM}
+		[ "${PART_ANDROID_CACHE}" ] &&
+			populate_android_cache ${PART_ANDROID_CACHE}
+		[ "${PART_ANDROID_USER_DATA}" ] &&
+			populate_android_user_data ${PART_ANDROID_USER_DATA}
+	else
+		[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
+		# We won't populate the other file systems for now
+	fi
 fi
 
 # Save off our partition into files used for installation.
