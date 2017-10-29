@@ -100,35 +100,44 @@ function parseargs() {
 	# Make sure a single argument was supplied
 	[ $# -lt 1 ] && usage "no partition specified"
 
+	IMAGE_TYPE=Linux
 	INPUT_FILES="L_LOADER USB_LOADER"
-	INPUT_FILES="${INPUT_FILES}"
-
-	if [ "$1" = "all" ] || [ "$1" = "system" ] ; then
-		[ -z "$2" ] && usage "no arg (filesystem) supplied"
-		ROOT_FS_ARCHIVE=$2
-	fi
 
 	case $1 in
-	all|layout|loader|boot|system)
+	all|system)
+		#echo "case all|system" >&2
+		[ -z "$2" ] && usage "no arg (filesystem) supplied"
+		if [ "$2" = "android" ]; then
+			IMAGE_TYPE=Android
+			INPUT_FILES="${INPUT_FILES} ANDROID_BOOT_IMAGE"
+			INPUT_FILES="${INPUT_FILES} ANDROID_SYSTEM_IMAGE"
+			INPUT_FILES="${INPUT_FILES} ANDROID_CACHE_IMAGE"
+			INPUT_FILES="${INPUT_FILES} ANDROID_USER_DATA_IMAGE"
+		else
+			ROOT_FS_ARCHIVE=$2
+			INPUT_FILES="${INPUT_FILES} ROOT_FS_ARCHIVE"
+		fi
+		;;&
+	all|boot)
+		#echo "case all|boot" >&2
+		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
+		INPUT_FILES="${INPUT_FILES} DEVICE_TREE_BINARY"
+		;;&
+	boot|loader|layout)
+		#echo "case boot|loader|layout" >&2
+		[ $# -ge 2 ] && usage "invalid arg (not required)"
+		;;
+	all|system)
+		# this is required to prevent an invalid arg from triggering
+		# an invalid partition error below
+		#echo "case all|system" >&2
 		;;
 	*)
+		#echo "case *" >&2
 		usage "invalid partition"
 	esac
 
 	PARTS=$1
-
-	if [ "$2" = "android" ]; then
-		IMAGE_TYPE=Android
-		INPUT_FILES="${INPUT_FILES} ANDROID_BOOT_IMAGE"
-		INPUT_FILES="${INPUT_FILES} ANDROID_SYSTEM_IMAGE"
-		INPUT_FILES="${INPUT_FILES} ANDROID_CACHE_IMAGE"
-		INPUT_FILES="${INPUT_FILES} ANDROID_USER_DATA_IMAGE"
-	else
-		IMAGE_TYPE=Linux
-		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
-		INPUT_FILES="${INPUT_FILES} DEVICE_TREE_BINARY"
-		INPUT_FILES="${INPUT_FILES} ROOT_FS_ARCHIVE"
-	fi
 }
 
 function suser() {
@@ -679,9 +688,11 @@ function installer_init() {
 	installer_update "# Created $(date)"
 	installer_update ""
 	if [ "${IMAGE_TYPE}" = Linux ]; then
-		installer_update "# Root file system built from:"
-		installer_update "#    ${ROOT_FS_ARCHIVE}"
-		installer_update ""
+		if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "system" ] ; then
+			installer_update "# Root file system built from:"
+			installer_update "#    ${ROOT_FS_ARCHIVE}"
+			installer_update ""
+		fi
 	fi
 }
 
