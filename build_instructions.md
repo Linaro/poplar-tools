@@ -199,7 +199,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
     #       recovery_files/install-*.scr
     #       recovery_files/partition1-1of1.gz
     #		...
-    bash ./poplar_recovery_builder.sh \
+    bash ./poplar_recovery_builder.sh all \
 		    linaro-stretch-developer-20170914-80.tar.gz
 ```
 
