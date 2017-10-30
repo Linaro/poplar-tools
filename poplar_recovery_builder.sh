@@ -592,7 +592,7 @@ function populate_boot() {
 		sudo cp ${DEVICE_TREE_BINARY} ${MOUNT}/hisilicon ||
 		nope "failed to save DTB to boot partition"
 		if [ "${INIT_RAMDISK}" ]; then
-			cp ${INIT_RAMDISK} ${MOUNT} ||
+			sudo cp ${INIT_RAMDISK} ${MOUNT} ||
 			nope "failed to save ${INIT_RAMDISK} to boot partition"
 		fi
 		# Set up the extlinux.conf file
