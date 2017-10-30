@@ -80,34 +80,64 @@ function usage() {
 	echo >&2
 	echo "${PROGNAME}: $@" >&2
 	echo >&2
-	echo "Usage: ${PROGNAME} <arg>" >&2
+	echo "Usage: ${PROGNAME} <partition> [arg]" >&2
 	echo >&2
-	echo "  for a Linux image, <arg> is a root file system tar archive" >&2
-	echo "  if <arg> is \"android\" an Android image is built" >&2
+	echo "  partition" >&2
+	echo "  all		build all partitions below" >&2
+	echo "  layout	build layout partition only" >&2
+	echo "  loader	build loader partition only" >&2
+	echo "  boot		build boot partitions only" >&2
+	echo "  system	build system parition only" >&2
+	echo >&2
+	echo "  for a Linux image, [arg] is a root file system tar archive" >&2
+	echo "  if [arg] is \"android\" an Android image is built" >&2
+	echo "  [arg] is only required for all or system partition" >&2
 	echo >&2
 	exit 1
 }
 
 function parseargs() {
 	# Make sure a single argument was supplied
-	[ $# -lt 1 ] && usage "no arguments supplied"
-	[ $# -ne 1 ] && usage "missing argument"
+	[ $# -lt 1 ] && usage "no partition specified"
 
+	IMAGE_TYPE=Linux
 	INPUT_FILES="L_LOADER USB_LOADER"
-	INPUT_FILES="${INPUT_FILES}"
-	if [ "$1" = "android" ]; then
-		IMAGE_TYPE=Android
-		INPUT_FILES="${INPUT_FILES} ANDROID_BOOT_IMAGE"
-		INPUT_FILES="${INPUT_FILES} ANDROID_SYSTEM_IMAGE"
-		INPUT_FILES="${INPUT_FILES} ANDROID_CACHE_IMAGE"
-		INPUT_FILES="${INPUT_FILES} ANDROID_USER_DATA_IMAGE"
-	else
-		IMAGE_TYPE=Linux
-		ROOT_FS_ARCHIVE=$1
+
+	case $1 in
+	all|system)
+		#echo "case all|system" >&2
+		[ -z "$2" ] && usage "no arg (filesystem) supplied"
+		if [ "$2" = "android" ]; then
+			IMAGE_TYPE=Android
+			INPUT_FILES="${INPUT_FILES} ANDROID_BOOT_IMAGE"
+			INPUT_FILES="${INPUT_FILES} ANDROID_SYSTEM_IMAGE"
+			INPUT_FILES="${INPUT_FILES} ANDROID_CACHE_IMAGE"
+			INPUT_FILES="${INPUT_FILES} ANDROID_USER_DATA_IMAGE"
+		else
+			ROOT_FS_ARCHIVE=$2
+			INPUT_FILES="${INPUT_FILES} ROOT_FS_ARCHIVE"
+		fi
+		;;&
+	all|boot)
+		#echo "case all|boot" >&2
 		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
 		INPUT_FILES="${INPUT_FILES} DEVICE_TREE_BINARY"
-		INPUT_FILES="${INPUT_FILES} ROOT_FS_ARCHIVE"
-	fi
+		;;&
+	boot|loader|layout)
+		#echo "case boot|loader|layout" >&2
+		[ $# -ge 2 ] && usage "invalid arg (not required)"
+		;;
+	all|system)
+		# this is required to prevent an invalid arg from triggering
+		# an invalid partition error below
+		#echo "case all|system" >&2
+		;;
+	*)
+		#echo "case *" >&2
+		usage "invalid partition"
+	esac
+
+	PARTS=$1
 }
 
 function suser() {
@@ -581,7 +611,9 @@ function populate_boot() {
 	populate_begin ${part_number}
 
 	# Save a copy of our loader partition into a file in /boot
-	sudo cp ${LOADER} ${MOUNT}/$(basename ${LOADER})
+	# This creates a dependency on populate_loader which gets in the
+	# way if we want to create a boot partition only so remove for now
+	#sudo cp ${LOADER} ${MOUNT}/$(basename ${LOADER})
 
 	if [ "${PART_ROOT}" ]; then
 		# Now copy in the kernel image, DTB, and extlinux directories
@@ -656,9 +688,11 @@ function installer_init() {
 	installer_update "# Created $(date)"
 	installer_update ""
 	if [ "${IMAGE_TYPE}" = Linux ]; then
-		installer_update "# Root file system built from:"
-		installer_update "#    ${ROOT_FS_ARCHIVE}"
-		installer_update ""
+		if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "system" ] ; then
+			installer_update "# Root file system built from:"
+			installer_update "#    ${ROOT_FS_ARCHIVE}"
+			installer_update ""
+		fi
 	fi
 }
 
@@ -807,6 +841,8 @@ echo
 echo ====== Poplar recovery image builder ======
 echo
 
+rm -rf ${RECOVERY}
+
 file_validate
 
 partition_init
@@ -833,33 +869,41 @@ suser
 # Ready to start creating
 disk_partition
 installer_init
-save_layout
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "layout" ] ; then
+	save_layout
+fi
 
 echo === populating loader partition and file systems in image ===
 
 # Create the loader file and save it to its partition
-populate_loader
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "loader" ] ; then
+	populate_loader
+fi
 
 # Save a copy of  "fastboot.bin" so it can be placed on a USB stick,
 # allowing it to be bootable for de-bricking.
 cp ${USB_LOADER} ${RECOVERY}/fastboot.bin
 
 # Populate the boot file system and save it to its partition
-populate_boot ${PART_BOOT}
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "boot" ] ; then
+	populate_boot ${PART_BOOT}
+fi
 
 # Now populate the rest of the partitions; we save them below
-if [ "${IMAGE_TYPE}" = Android ]; then
-	[ "${PART_ANDROID_BOOT}" ] &&
-		populate_android_boot ${PART_ANDROID_BOOT}
-	[ "${PART_ANDROID_SYSTEM}" ] &&
-		populate_android_system ${PART_ANDROID_SYSTEM}
-	[ "${PART_ANDROID_CACHE}" ] &&
-		populate_android_cache ${PART_ANDROID_CACHE}
-	[ "${PART_ANDROID_USER_DATA}" ] &&
-		populate_android_user_data ${PART_ANDROID_USER_DATA}
-else
-	[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
-	# We won't populate the other file systems for now
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "system" ] ; then
+	if [ "${IMAGE_TYPE}" = Android ]; then
+		[ "${PART_ANDROID_BOOT}" ] &&
+			populate_android_boot ${PART_ANDROID_BOOT}
+		[ "${PART_ANDROID_SYSTEM}" ] &&
+			populate_android_system ${PART_ANDROID_SYSTEM}
+		[ "${PART_ANDROID_CACHE}" ] &&
+			populate_android_cache ${PART_ANDROID_CACHE}
+		[ "${PART_ANDROID_USER_DATA}" ] &&
+			populate_android_user_data ${PART_ANDROID_USER_DATA}
+	else
+		[ "${PART_ROOT}" ] && populate_root ${PART_ROOT}
+		# We won't populate the other file systems for now
+	fi
 fi
 
 # Save off our partition into files used for installation.
