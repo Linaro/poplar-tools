@@ -586,7 +586,7 @@ function kernel_args() {
 	echo -n " rootfstype=${PART_FSTYPE[${PART_ROOT}]}"
 	echo -n " rootwait"
 	echo -n " rw"
-	echo -n " earlycon"
+	echo -n " earlycon=pl011,0xf8b00000"
 	echo -n " mmz=ddr,0,0,60M"	# Currently required for SDK kernels
 	echo
 }
