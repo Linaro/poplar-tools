@@ -581,7 +581,6 @@ function populate_root() {
 
 # Output the kernel command line arguments.
 function kernel_args() {
-	echo -n " loglevel=4"
 	echo -n " mem=1G"
 	echo -n " root=${EMMC_DEV}p${PART_ROOT}"
 	echo -n " rootfstype=${PART_FSTYPE[${PART_ROOT}]}"
