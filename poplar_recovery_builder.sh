@@ -86,7 +86,8 @@ function usage() {
 	echo "  all		build all partitions below" >&2
 	echo "  layout	build layout partition only" >&2
 	echo "  loader	build loader partition only" >&2
-	echo "  boot		build boot partitions only" >&2
+	echo "  boot		build boot partition only" >&2
+	echo "  loader_boot	build loader and boot partitions only" >&2
 	echo "  system	build system parition only" >&2
 	echo >&2
 	echo "  for a Linux image, [arg] is a root file system tar archive" >&2
@@ -118,13 +119,13 @@ function parseargs() {
 			INPUT_FILES="${INPUT_FILES} ROOT_FS_ARCHIVE"
 		fi
 		;;&
-	all|boot)
-		#echo "case all|boot" >&2
+	all|loader_boot|boot)
+		#echo "case all|loader_boot|boot" >&2
 		INPUT_FILES="${INPUT_FILES} KERNEL_IMAGE"
 		INPUT_FILES="${INPUT_FILES} DEVICE_TREE_BINARY"
 		;;&
-	boot|loader|layout)
-		#echo "case boot|loader|layout" >&2
+	loader_boot|boot|loader|layout)
+		#echo "case loader_boot|boot|loader|layout" >&2
 		[ $# -ge 2 ] && usage "invalid arg (not required)"
 		;;
 	all|system)
@@ -876,7 +877,8 @@ fi
 echo === populating loader partition and file systems in image ===
 
 # Create the loader file and save it to its partition
-if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "loader" ] ; then
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "loader_boot" ] || \
+	[ "${PARTS}" = "loader" ]; then
 	populate_loader
 fi
 
@@ -885,7 +887,8 @@ fi
 cp ${USB_LOADER} ${RECOVERY}/fastboot.bin
 
 # Populate the boot file system and save it to its partition
-if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "boot" ] ; then
+if [ "${PARTS}" = "all" ] || [ "${PARTS}" = "loader_boot" ] || \
+	[ "${PARTS}" = "boot" ]; then
 	populate_boot ${PART_BOOT}
 fi
 
