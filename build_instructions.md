@@ -51,9 +51,9 @@ package a USB recovery device. These instructions assume you are using Linux bas
 
 ```shell
   cd ${TOP}
+  git clone https://github.com/ARM-software/arm-trusted-firmware
   git clone https://github.com/linaro/poplar-tools.git -b latest
   git clone https://github.com/linaro/poplar-l-loader.git -b latest
-  git clone https://github.com/linaro/poplar-arm-trusted-firmware.git -b latest
   git clone https://github.com/linaro/poplar-u-boot.git -b latest
   git clone https://github.com/linaro/poplar-linux.git -b latest
   git clone https://github.com/OP-TEE/optee_os
