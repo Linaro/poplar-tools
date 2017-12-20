@@ -614,9 +614,9 @@ Towards the end of the test, you should see something like:
 	regression_1001 OK
 	regression_1002 OK
 	...
-	regression_9524 OK
+	regression_8002 OK
 	+-----------------------------------------------------
-	23967 subtests of which 0 failed
-	82 test cases of which 0 failed
+	15677 subtests of which 0 failed
+	68 test cases of which 0 failed
 	0 test case was skipped
 ```
