@@ -152,7 +152,7 @@ package a USB recovery device. These instructions assume you are using Linux bas
     # "l-loader", next:
     #       build/poplar/debug/bl1.bin
     #       build/poplar/debug/fip.bin
-    cd ${TOP}/poplar-arm-trusted-firmware
+    cd ${TOP}/arm-trusted-firmware
     make distclean
     make CROSS_COMPILE=${CROSS_64} all fip DEBUG=1 PLAT=poplar SPD=opteed \
 	BL33=${TOP}/poplar-u-boot/u-boot.bin \
@@ -170,8 +170,8 @@ package a USB recovery device. These instructions assume you are using Linux bas
     # USB flash drive:
     #       l-loader.bin
     cd ${TOP}/poplar-l-loader
-    cp ${TOP}/poplar-arm-trusted-firmware/build/poplar/debug/bl1.bin atf/
-    cp ${TOP}/poplar-arm-trusted-firmware/build/poplar/debug/fip.bin atf/
+    cp ${TOP}/arm-trusted-firmware/build/poplar/debug/bl1.bin atf/
+    cp ${TOP}/arm-trusted-firmware/build/poplar/debug/fip.bin atf/
     make clean
     make CROSS_COMPILE=${CROSS_32}
 ```
